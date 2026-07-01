@@ -53,10 +53,13 @@ $icon = icon_for($kind);
               Download
             </a>
           </div>
-          <div class="flex gap-2 text-2xl justify-center pt-2 border-t border-slate-200 dark:border-slate-800">
-            <a href="https://wa.me/?text=<?= e(urlencode($dlUrl)) ?>" target="_blank" class="p-2 hover:scale-110 transition">💬</a>
-            <a href="https://t.me/share/url?url=<?= e(urlencode($dlUrl)) ?>" target="_blank" class="p-2 hover:scale-110 transition">✈️</a>
-            <a href="https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=<?= e(urlencode($dlUrl)) ?>" target="_blank" class="p-2 hover:scale-110 transition">📱</a>
+          <div class="flex flex-col items-center pt-2 border-t border-slate-200 dark:border-slate-800">
+            <div class="flex gap-2 text-2xl justify-center pt-2">
+              <a href="https://wa.me/?text=<?= e(urlencode($dlUrl)) ?>" target="_blank" class="p-2 hover:scale-110 transition">💬</a>
+              <a href="https://t.me/share/url?url=<?= e(urlencode($dlUrl)) ?>" target="_blank" class="p-2 hover:scale-110 transition">✈️</a>
+            </div>
+            <img src="<?= e(url('/qr/' . urlencode($dlUrl))) ?>" alt="QR" class="w-36 h-36 rounded-lg bg-white p-1 mt-2">
+            <p class="text-xs text-slate-400 mt-1">Scan untuk buka di HP</p>
           </div>
           <p class="text-xs text-center text-slate-400 mt-4">Powered by <?= e($appName) ?></p>
         </div>

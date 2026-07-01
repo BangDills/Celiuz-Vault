@@ -94,6 +94,25 @@ function file_thumb(int $id): void
     readfile($path);
 }
 
+// QR code PNG generated locally (no third-party API). Encodes arbitrary URL.
+function qr_png(string $data): void
+{
+    if ($data === '' || !filter_var($data, FILTER_VALIDATE_URL)) {
+        http_response_code(400);
+        return;
+    }
+    // phpqrcode is an old lib that emits PHP 8 deprecation notices; silence
+    // them so they don't corrupt the PNG output stream.
+    $prevEr = error_reporting(E_ERROR | E_PARSE);
+    $prevDd = ini_set('display_errors', '0');
+    require_once APP_ROOT . '/app/lib/phpqrcode.php';
+    header('Content-Type: image/png');
+    header('Cache-Control: public, max-age=86400');
+    QRcode::png($data, false, QR_ECLEVEL_L, 4, 2, false);
+    error_reporting($prevEr);
+    ini_set('display_errors', $prevDd);
+}
+
 // Signed download (time-limited token, used by share page).
 function file_download_signed(int $id, string $token): void
 {

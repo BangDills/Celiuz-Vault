@@ -46,6 +46,12 @@ if (preg_match('#^/thumb/(?<id>\d+)$#', $path, $m)) {
     file_thumb((int)$m['id']);
     exit;
 }
+// QR code for an arbitrary URL (used by share UI). Public-ish: it only encodes
+// a URL, no secrets. Registered as public so share page (logged-out) can use it.
+if (preg_match('#^/qr/(?<data>.+)$#', $path, $m)) {
+    qr_png(urldecode($m['data']));
+    exit;
+}
 
 // Auth.
 if ($path === '/login') {

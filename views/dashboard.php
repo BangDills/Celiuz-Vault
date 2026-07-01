@@ -193,7 +193,10 @@ $vm = array_map('file_view_model', $files);
             <a :href="`https://wa.me/?text=${encodeURIComponent(shareResult.url)}`" target="_blank" class="p-2 hover:scale-110 transition">💬</a>
             <a :href="`https://t.me/share/url?url=${encodeURIComponent(shareResult.url)}`" target="_blank" class="p-2 hover:scale-110 transition">✈️</a>
             <button @click="copy(shareResult.url)" class="p-2 hover:scale-110 transition">📋</button>
-            <a :href="`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(shareResult.url)}`" target="_blank" class="p-2 hover:scale-110 transition">📱</a>
+          </div>
+          <div class="flex flex-col items-center pt-3 mt-2 border-t border-slate-200 dark:border-slate-800">
+            <img :src="`${window.VAULT_BASE}/qr/${encodeURIComponent(shareResult.url)}`" alt="QR" class="w-36 h-36 rounded-lg bg-white p-1">
+            <p class="text-xs text-slate-400 mt-1">Scan untuk buka di HP</p>
           </div>
           <button @click="shareModal=false" class="w-full py-2 rounded-lg bg-slate-200 dark:bg-slate-800 text-sm">Selesai</button>
         </div>

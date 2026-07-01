@@ -10,6 +10,7 @@ Self-hosted personal file hosting — single PHP app, zero build step, made for 
 - **Built-in preview**: image, video, audio, PDF, text/code
 - **Video thumbnails** — auto-generated via ffmpeg (graceful fallback to icon if ffmpeg is absent, common on shared hosting)
 - **Share links**: custom token, optional password, optional expiry, hit counter
+- **QR codes** for share links — generated locally on your server (no third-party API), scan with a phone to open/download
 - **Folders** with breadcrumbs (nested, drag-ready structure)
 - **Signed download URLs** — files live outside the web root, served only via short-lived HMAC tokens
 - **Dark / light theme** toggle, persisted
@@ -19,10 +20,11 @@ Self-hosted personal file hosting — single PHP app, zero build step, made for 
 
 ## Requirements
 
-- PHP 8.1+ with `pdo_sqlite` (or `sqlite3`), `fileinfo` — standard on cPanel
+- PHP 8.1+ with `pdo_sqlite` (or `sqlite3`), `fileinfo`, `gd` — standard on cPanel
 - Apache with `mod_rewrite` (for pretty URLs) — optional, falls back to `?route=`
 - Writable directory for file storage (outside `public_html`)
 - **ffmpeg** (optional) — only needed for video thumbnails; uploads work without it
+- **GD** extension — needed for QR code generation on share links
 
 ## Quick start (local)
 
@@ -96,7 +98,8 @@ The SQLite DB (`data.sqlite`) and upload folder are created automatically on fir
 │   ├── helpers.php     # auth, url, streaming, tokens
 │   ├── files.php       # file + folder operations
 │   ├── shares.php      # share link operations
-│   └── actions.php     # route handlers + view renderer
+│   ├── actions.php     # route handlers + view renderer
+│   └── lib/phpqrcode.php  # vendored QR generator (LGPL-3.0, see file header)
 ├── views/              # PHP templates (layout, login, dashboard, share, error)
 ├── assets/
 │   ├── app.js          # Alpine component (upload, share, preview)
@@ -121,3 +124,5 @@ The SQLite DB (`data.sqlite`) and upload folder are created automatically on fir
 ## License
 
 MIT — do what you want. Attribution appreciated but not required.
+
+The vendored `app/lib/phpqrcode.php` is **LGPL-3.0** (Copyright Dominik Dzienia) — see its file header for terms.
