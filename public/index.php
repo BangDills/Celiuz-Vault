@@ -77,8 +77,11 @@ if ($path === '/logout') {
     exit;
 }
 
-// Everything else requires login.
-require_login();
+// Everything else requires login — except API calls that present a valid
+// bearer token (script/curl access without a browser session).
+if (!(str_starts_with($path, '/api/') && is_api_authed())) {
+    require_login();
+}
 
 // API endpoints (JSON).
 if (str_starts_with($path, '/api/')) {

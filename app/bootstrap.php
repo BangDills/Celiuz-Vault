@@ -24,3 +24,25 @@ require APP_ROOT . '/app/helpers.php';
 require APP_ROOT . '/app/actions.php';
 
 db_init($config['db_path']);
+
+// Content Security Policy — moderate, allows the CDN scripts/styles in use.
+// Skipped for the dev server if it interferes; only set once.
+if (!headers_sent()) {
+    $csp = [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src https://fonts.gstatic.com data:",
+        "img-src 'self' data: blob: https:",
+        "media-src 'self' blob:",
+        "frame-src 'self'",
+        "connect-src 'self'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "object-src 'none'",
+    ];
+    header('Content-Security-Policy: ' . implode('; ', $csp));
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: SAMEORIGIN');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+}

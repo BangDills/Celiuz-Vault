@@ -12,6 +12,12 @@ Self-hosted personal file hosting — single PHP app, zero build step, made for 
 - **Share links**: custom token, optional password, optional expiry, hit counter
 - **QR codes** for share links — generated locally on your server (no third-party API), scan with a phone to open/download
 - **Notes** — text notes with titles; URLs auto-link on display, stored alongside files
+- **File versioning** — uploading a file with the same name supersedes the old revision; restore or delete past versions
+- **Search & sort** — instant client-side filter by name + sort by date/name/size
+- **Drag & drop move** — drag a file card onto a folder to move it
+- **Keyboard shortcuts** — `/` focus search, `n` new note, `u` upload
+- **Toast notifications** for upload/delete/copy/move
+- **API key access** — optional bearer token for script/curl access without browser login
 - **Folders** with breadcrumbs (nested, drag-ready structure)
 - **Signed download URLs** — files live outside the web root, served only via short-lived HMAC tokens
 - **Dark / light theme** toggle, persisted
@@ -69,7 +75,8 @@ The SQLite DB (`data.sqlite`) and upload folder are created automatically on fir
 
 | Key | Meaning | Default |
 |---|---|---|
-| `password` | Login password | `change-me-please` |
+| `password` | Login password (plaintext or `password_hash()` string) | `change-me-please` |
+| `api_key` | Optional bearer token for API access without login (empty = off) | `` |
 | `secret` | HMAC key for signed download tokens | set your own |
 | `storage_path` | Where uploaded files are stored (keep outside web root) | `../storage/uploads` |
 | `db_path` | SQLite database file path | `data.sqlite` |
@@ -84,7 +91,10 @@ The SQLite DB (`data.sqlite`) and upload folder are created automatically on fir
 - **Password gate** on shares uses `password_hash` / `password_verify`.
 - **Login** is single-user with `hash_equals` (constant-time) + a 1s sleep on failure to throttle brute force.
 - **Filename sanitization** — stored under random `storage_id`, original name only used for `Content-Disposition`.
-- **What to harden before going public:** store a `password_hash()` in config instead of plaintext (swap `check_password`), enable HTTPS (cookie `secure` flag auto-detects it), and consider ClamAV scanning for untrusted uploads.
+- **What to harden before going public:** store a `password_hash()` in config (now supported — `check_password` auto-detects `$2y$`/argon2 hashes), enable HTTPS (cookie `secure` flag auto-detects it), and consider ClamAV scanning for untrusted uploads.
+- **CSP + security headers** set automatically (Content-Security-Policy, X-Content-Type-Options, X-Frame-Options, Referrer-Policy).
+- **Upload rate limit** — 60 uploads/min per IP (SQLite-backed); returns 429 when exceeded.
+- **API key** — set `api_key` in config to allow `Authorization: Bearer <key>` access to `/api/*` without a browser session.
 
 ## Project structure
 
@@ -121,6 +131,9 @@ The SQLite DB (`data.sqlite`) and upload folder are created automatically on fir
 | `POST` | `/api/note` | Create note — `{title, body, folder?}` |
 | `PUT` | `/api/note/<id>` | Update note — `{title, body, folder?}` |
 | `DELETE` | `/api/note/<id>` | Delete note |
+| `GET` | `/api/file/<id>/versions` | List archived versions of a file |
+| `POST` | `/api/file/<id>/versions` | Restore a version — `{version_id}` |
+| `DELETE` | `/api/version/<id>` | Delete an archived version |
 | `DELETE` | `/api/file/<id>` | Delete file |
 | `PATCH` | `/api/file/<id>` | Move file — `{folder}` |
 | `DELETE` | `/api/share/<id>` | Delete share |

@@ -46,12 +46,100 @@ function save_upload(array $file, ?int $folderId): array
     $thumb = generate_thumb($dest, $mime);
 
     $pdo = db($cfg['db_path']);
+
+    // Versioning: if a file with the same name exists in this folder,
+    // archive the old revision and replace the current row in place.
+    $existing = find_file_in_folder($name, $folderId);
+    if ($existing !== null) {
+        archive_version($existing['id'], $existing['storage_id'], $existing['name'], $existing['mime'], (int)$existing['size']);
+        // Remove old thumbnail; the new upload gets a fresh one.
+        if ($existing['thumb'] !== null) {
+            @unlink(storage_dir() . '/' . $existing['thumb']);
+        }
+        $stmt = $pdo->prepare(
+            'UPDATE files SET storage_id = ?, mime = ?, size = ?, thumb = ? WHERE id = ?'
+        );
+        $stmt->execute([$sid, $mime, $file['size'], $thumb, $existing['id']]);
+        return get_file((int)$existing['id']) ?? throw new RuntimeException('Update failed');
+    }
+
     $stmt = $pdo->prepare(
         'INSERT INTO files (storage_id, name, mime, size, folder_id, thumb) VALUES (?, ?, ?, ?, ?, ?)'
     );
     $stmt->execute([$sid, $name, $mime, $file['size'], $folderId, $thumb]);
     $id = (int)$pdo->lastInsertId();
     return get_file($id) ?? throw new RuntimeException('Insert failed');
+}
+
+// Find an existing file row by name within a folder (for versioning).
+function find_file_in_folder(string $name, ?int $folderId): ?array
+{
+    $pdo = db(config()['db_path']);
+    if ($folderId === null) {
+        $stmt = $pdo->prepare('SELECT * FROM files WHERE name = ? AND folder_id IS NULL LIMIT 1');
+        $stmt->bindValue(1, $name);
+        $stmt->execute();
+    } else {
+        $stmt = $pdo->prepare('SELECT * FROM files WHERE name = ? AND folder_id = ? LIMIT 1');
+        $stmt->execute([$name, $folderId]);
+    }
+    $row = $stmt->fetch();
+    return $row ?: null;
+}
+
+// Archive the current revision of a file into file_versions.
+function archive_version(int $fileId, string $storageId, string $name, string $mime, int $size): void
+{
+    db(config()['db_path'])
+        ->prepare('INSERT INTO file_versions (file_id, storage_id, name, mime, size) VALUES (?, ?, ?, ?, ?)')
+        ->execute([$fileId, $storageId, $name, $mime, $size]);
+}
+
+function list_versions(int $fileId): array
+{
+    $stmt = db(config()['db_path'])->prepare('SELECT * FROM file_versions WHERE file_id = ? ORDER BY created_at DESC');
+    $stmt->execute([$fileId]);
+    return $stmt->fetchAll();
+}
+
+function version_count(int $fileId): int
+{
+    $stmt = db(config()['db_path'])->prepare('SELECT COUNT(*) FROM file_versions WHERE file_id = ?');
+    $stmt->execute([$fileId]);
+    return (int)$stmt->fetchColumn();
+}
+
+// Restore an archived revision: archive the current, then promote the old
+// revision's storage_id/mime/size into the current row. Returns updated file.
+function restore_version(int $fileId, int $versionId): ?array
+{
+    $pdo = db(config()['db_path']);
+    $file = get_file($fileId);
+    if (!$file) return null;
+    $stmt = $pdo->prepare('SELECT * FROM file_versions WHERE id = ? AND file_id = ?');
+    $stmt->execute([$versionId, $fileId]);
+    $v = $stmt->fetch();
+    if (!$v) return null;
+
+    // Archive current, delete the restored version row, swap in the old blob.
+    archive_version($fileId, $file['storage_id'], $file['name'], $file['mime'], (int)$file['size']);
+    $pdo->prepare('DELETE FROM file_versions WHERE id = ?')->execute([$versionId]);
+    $pdo->prepare('UPDATE files SET storage_id = ?, mime = ?, size = ? WHERE id = ?')
+        ->execute([$v['storage_id'], $v['mime'], $v['size'], $fileId]);
+    return get_file($fileId);
+}
+
+// Delete a single archived version (and its blob on disk).
+function delete_version(int $versionId): void
+{
+    $pdo = db(config()['db_path']);
+    $stmt = $pdo->prepare('SELECT * FROM file_versions WHERE id = ?');
+    $stmt->execute([$versionId]);
+    $v = $stmt->fetch();
+    if (!$v) return;
+    $path = storage_dir() . '/' . $v['storage_id'];
+    if (is_file($path)) @unlink($path);
+    $pdo->prepare('DELETE FROM file_versions WHERE id = ?')->execute([$versionId]);
 }
 
 // Path to a file's thumbnail (jpg next to it in storage).
@@ -169,6 +257,11 @@ function delete_file(int $id): void
     if ($file['thumb'] !== null) {
         $tp = storage_dir() . '/' . $file['thumb'];
         if (is_file($tp)) @unlink($tp);
+    }
+    // Remove archived version blobs too (CASCADE deletes the rows).
+    foreach (list_versions($id) as $v) {
+        $vp = storage_dir() . '/' . $v['storage_id'];
+        if (is_file($vp)) @unlink($vp);
     }
     db(config()['db_path'])->prepare('DELETE FROM files WHERE id = ?')->execute([$id]);
 }

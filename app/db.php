@@ -65,9 +65,30 @@ function db_init(string $dbPath): void
             FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE SET NULL
         )
     ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS file_versions (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            file_id     INTEGER NOT NULL,
+            storage_id  TEXT    NOT NULL,
+            name        TEXT    NOT NULL,
+            mime        TEXT    NOT NULL,
+            size        INTEGER NOT NULL,
+            created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (file_id) REFERENCES files(id) ON DELETE CASCADE
+        )
+    ");
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS upload_log (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip          TEXT    NOT NULL,
+            created_at  REAL    NOT NULL
+        )
+    ");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_upload_ip ON upload_log(ip)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_files_folder ON files(folder_id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_notes_folder ON notes(folder_id)");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_versions_file ON file_versions(file_id)");
 
     // Migrations: add columns if missing (idempotent, works on existing DBs).
     $cols = $pdo->query('PRAGMA table_info(files)')->fetchAll(PDO::FETCH_COLUMN, 1);

@@ -45,12 +45,48 @@ function vault(initial) {
     notes: initial.notes || [],
     noteModal: false,
     noteForm: { id: null, title: '', body: '' },
+    search: '',
+    sortKey: 'date',
+    versionModal: false,
+    versionFile: null,
+    versionList: [],
+    toasts: [],
     humanSize,
     fileIconSvg,
 
     init() {
-      // Apply theme class to <html>.
       document.documentElement.classList.toggle('dark', this.theme === 'dark');
+      // Keyboard shortcuts (dashboard only; ignore when typing in a field).
+      document.addEventListener('keydown', (e) => {
+        const tag = (e.target?.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.metaKey || e.ctrlKey) return;
+        if (e.key === '/') { e.preventDefault(); this.$refs.searchInput?.focus(); }
+        else if (e.key.toLowerCase() === 'n') { e.preventDefault(); this.openNote(null); }
+        else if (e.key.toLowerCase() === 'u') { e.preventDefault(); this.$refs.fileInput?.click(); }
+      });
+    },
+
+    // --- Toasts ---
+    toast(msg, isError = false) {
+      const id = Math.random().toString(36).slice(2);
+      this.toasts.push({ id, msg, isError });
+      setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 2800);
+    },
+
+    // --- Search + sort (client-side, design/UX only; no backend change) ---
+    get filteredFiles() {
+      const q = this.search.trim().toLowerCase();
+      let list = this.files.filter(f => !q || f.name.toLowerCase().includes(q));
+      const by = this.sortKey;
+      return list.slice().sort((a, b) => {
+        if (by === 'name') return a.name.localeCompare(b.name);
+        if (by === 'size') return b.size - a.size;
+        return String(b.created).localeCompare(String(a.created)); // date desc
+      });
+    },
+    get filteredNotes() {
+      const q = this.search.trim().toLowerCase();
+      return this.notes.filter(n => !q || n.title.toLowerCase().includes(q) || (n.body || '').toLowerCase().includes(q));
     },
 
     toggleTheme() {
@@ -99,6 +135,7 @@ function vault(initial) {
             if (nf) this.files.unshift(nf);
             this.stats.count++;
             this.stats.size += file.size;
+            this.toast(nf.versions > 0 ? 'Versi baru disimpan' : 'Upload selesai');
             setTimeout(() => {
               this.uploads = this.uploads.filter(u => u.id !== id);
             }, 1500);
@@ -108,7 +145,8 @@ function vault(initial) {
             try {
               const err = JSON.parse(xhr.responseText);
               entry.status = err.error || 'gagal';
-            } catch (_) {}
+              this.toast(err.error || 'Upload gagal', true);
+            } catch (_) { this.toast('Upload gagal', true); }
           }
         };
         xhr.onerror = () => { entry.status = 'gagal'; entry.pct = 100; };
@@ -125,6 +163,7 @@ function vault(initial) {
       }).then(r => r.json()).then(res => {
         this.folders.push({ id: res.id, name: res.name, parent: res.parent });
         this.newFolder = '';
+        this.toast('Folder dibuat');
       });
     },
 
@@ -135,6 +174,7 @@ function vault(initial) {
           this.files = this.files.filter(x => x.id !== f.id);
           this.stats.count--;
           this.stats.size -= f.size;
+          this.toast('File dihapus');
         });
     },
 
@@ -163,6 +203,60 @@ function vault(initial) {
         // Make absolute URL for sharing.
         const abs = new URL(res.url, window.location.origin).href;
         this.shareResult = { ...res, url: abs };
+      });
+    },
+
+    // --- File versioning ---
+
+    openVersions(f) {
+      this.versionFile = f;
+      this.versionList = [];
+      this.versionModal = true;
+      fetch(window.VAULT_BASE + '/api/file/' + f.id + '/versions')
+        .then(r => r.json())
+        .then(res => { this.versionList = res.versions || []; });
+    },
+
+    restoreVersion(vid) {
+      if (!this.versionFile) return;
+      fetch(window.VAULT_BASE + '/api/file/' + this.versionFile.id + '/versions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version_id: vid }),
+      }).then(r => r.json()).then(updated => {
+        if (updated.error) { alert(updated.error); return; }
+        const idx = this.files.findIndex(x => x.id === updated.id);
+        if (idx >= 0) this.files.splice(idx, 1, updated);
+        this.versionFile = updated;
+        this.openVersions(updated);
+        this.toast('Versi dipulihkan');
+      });
+    },
+
+    deleteVersion(vid) {
+      if (!confirm('Hapus versi lama ini?')) return;
+      fetch(window.VAULT_BASE + '/api/version/' + vid, { method: 'DELETE' })
+        .then(() => { this.versionList = this.versionList.filter(v => v.id !== vid); });
+    },
+
+    // --- Drag file -> folder move ---
+
+    onFileDragStart(f, e) {
+      e.dataTransfer.setData('text/plain', String(f.id));
+      e.dataTransfer.effectAllowed = 'move';
+    },
+    onFolderDrop(folder, e) {
+      e.preventDefault();
+      const id = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      if (!id) return;
+      fetch(window.VAULT_BASE + '/api/file/' + id, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: folder ? folder.id : null }),
+      }).then(r => r.json()).then(res => {
+        if (res.error) { this.toast(res.error, true); return; }
+        this.files = this.files.filter(x => x.id !== id);
+        this.toast('Dipindahkan ke ' + (folder ? folder.name : 'Root'));
       });
     },
 
@@ -203,25 +297,24 @@ function vault(initial) {
         .then(() => {
           this.notes = this.notes.filter(x => x.id !== n.id);
           if (this.noteForm.id === n.id) this.closeNote();
+          this.toast('Catatan dihapus');
         });
     },
 
     async copy(text) {
       try {
         await navigator.clipboard.writeText(text);
-        this.copied = true;
-        setTimeout(() => this.copied = false, 1500);
       } catch (_) {
-        // Fallback
         const ta = document.createElement('textarea');
         ta.value = text;
         document.body.appendChild(ta);
         ta.select();
         document.execCommand('copy');
         ta.remove();
-        this.copied = true;
-        setTimeout(() => this.copied = false, 1500);
       }
+      this.copied = true;
+      this.toast('Tersalin');
+      setTimeout(() => this.copied = false, 1500);
     },
   };
 }

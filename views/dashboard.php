@@ -33,6 +33,20 @@ $vm = array_map('file_view_model', $files);
     </div>
   </header>
 
+  <!-- Search + sort bar -->
+  <div class="flex flex-col sm:flex-row gap-2 mb-5">
+    <div class="relative flex-1">
+      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-cv-faint"><?= lucide('search', 'w-[18px] h-[18px]') ?></span>
+      <input x-ref="searchInput" x-model="search" type="text" placeholder="Cari file atau catatan..."
+             class="cv-focus w-full h-10 pl-10 pr-3.5 rounded-xl bg-cv-surface border border-cv-border text-sm transition">
+    </div>
+    <select x-model="sortKey" class="cv-focus h-10 px-3.5 rounded-xl bg-cv-surface border border-cv-border text-sm transition">
+      <option value="date">Terbaru</option>
+      <option value="name">Nama (A-Z)</option>
+      <option value="size">Ukuran</option>
+    </select>
+  </div>
+
   <!-- Breadcrumb -->
   <nav class="flex items-center flex-wrap gap-1 text-sm mb-5 text-cv-muted">
     <a :href="`<?= e(url('/')) ?>`" class="inline-flex items-center gap-1.5 hover:text-cv-text px-2.5 py-1.5 rounded-lg hover:bg-cv-surface transition">
@@ -94,7 +108,9 @@ $vm = array_map('file_view_model', $files);
   <!-- Folders -->
   <div x-show="folders.length" class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-5">
     <template x-for="f in folders" :key="f.id">
-      <a :href="`<?= e(url('/?folder=')) ?>${f.id}`" class="bento card-hover group p-4 flex flex-col items-center gap-2.5 hover:border-cv-accent/40 transition">
+      <a :href="`<?= e(url('/?folder=')) ?>${f.id}`"
+         @dragover.prevent @drop="onFolderDrop(f, $event)"
+         class="bento card-hover group p-4 flex flex-col items-center gap-2.5 hover:border-cv-accent/40 transition">
         <div class="text-cv-muted group-hover:text-cv-accent transition">
           <?= lucide('folder', 'w-8 h-8') ?>
         </div>
@@ -104,8 +120,8 @@ $vm = array_map('file_view_model', $files);
   </div>
 
   <!-- Notes -->
-  <div x-show="notes.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
-    <template x-for="n in notes" :key="'n'+n.id">
+  <div x-show="filteredNotes.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+    <template x-for="n in filteredNotes" :key="'n'+n.id">
       <div class="bento card-hover group relative p-4 hover:border-cv-accent/40 transition cursor-pointer" @click="openNote(n)">
         <div class="flex items-start gap-2.5 mb-2">
           <span class="text-cv-accent mt-0.5 shrink-0"><?= lucide('note', 'w-[18px] h-[18px]') ?></span>
@@ -122,12 +138,18 @@ $vm = array_map('file_view_model', $files);
   </div>
 
   <!-- Files -->
-  <div x-show="!files.length && !notes.length" class="bento text-center py-16 text-cv-muted">
-    <p>Belum ada file atau catatan. Upload pertamamu!</p>
+  <div x-show="!filteredFiles.length && !filteredNotes.length" class="bento text-center py-16 text-cv-muted">
+    <template x-if="search">
+      <p>Tidak ada hasil untuk "<span x-text="search" class="font-medium"></span>"</p>
+    </template>
+    <template x-if="!search">
+      <p>Belum ada file atau catatan. Upload pertamamu!</p>
+    </template>
   </div>
   <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-    <template x-for="f in files" :key="f.id">
-      <div class="bento card-hover group relative overflow-hidden hover:border-cv-accent/40 transition">
+    <template x-for="f in filteredFiles" :key="f.id">
+      <div draggable="true" @dragstart="onFileDragStart(f, $event)"
+           class="bento card-hover group relative overflow-hidden hover:border-cv-accent/40 transition">
         <!-- Preview -->
         <div class="aspect-[4/3] bg-cv-bg flex items-center justify-center overflow-hidden cursor-pointer" @click="preview(f)">
           <template x-if="f.kind==='image'">
@@ -154,6 +176,10 @@ $vm = array_map('file_view_model', $files);
             <p class="text-[13px] font-medium truncate" x-text="f.name"></p>
             <p class="text-[11px] text-cv-faint" x-text="f.size_h"></p>
           </div>
+          <button x-show="f.versions > 0" @click.stop="openVersions(f)"
+                  class="shrink-0 inline-flex items-center gap-1 text-[10px] font-medium px-1.5 h-5 rounded-md bg-cv-accent/10 text-cv-accent" title="Riwayat versi">
+            <span x-text="f.versions"></span> v
+          </button>
         </div>
         <!-- Actions -->
         <div class="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition flex gap-1">
@@ -169,6 +195,32 @@ $vm = array_map('file_view_model', $files);
         </div>
       </div>
     </template>
+  </div>
+
+  <!-- Versions modal -->
+  <div x-show="versionModal" x-cloak @keydown.escape.window="versionModal=false" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" @click.self="versionModal=false">
+    <div class="bento p-6 w-full max-w-md shadow-pop">
+      <h3 class="font-semibold text-lg mb-1 tracking-tight">Riwayat versi</h3>
+      <p class="text-xs text-cv-muted mb-4 truncate" x-text="versionFile?.name"></p>
+      <template x-if="!versionList.length">
+        <p class="text-sm text-cv-muted py-4 text-center">Tidak ada versi lama.</p>
+      </template>
+      <div class="space-y-2 max-h-72 overflow-auto">
+        <template x-for="v in versionList" :key="v.id">
+          <div class="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-cv-bg border border-cv-border">
+            <div class="min-w-0">
+              <p class="text-xs font-medium" x-text="v.size_h"></p>
+              <p class="text-[11px] text-cv-faint" x-text="v.created"></p>
+            </div>
+            <div class="flex gap-1.5 shrink-0">
+              <button @click="restoreVersion(v.id)" class="px-2.5 h-7 rounded-lg bg-cv-accent text-cv-accentfg text-xs font-medium hover:bg-cv-accenthover transition">Restore</button>
+              <button @click="deleteVersion(v.id)" class="px-2.5 h-7 rounded-lg bg-cv-surface border border-cv-border text-cv-muted hover:text-red-600 text-xs transition">Hapus</button>
+            </div>
+          </div>
+        </template>
+      </div>
+      <button @click="versionModal=false" class="w-full mt-4 h-10 rounded-xl bg-cv-surface hover:bg-cv-bg border border-cv-border text-sm transition">Tutup</button>
+    </div>
   </div>
 
   <!-- Preview modal -->
@@ -265,6 +317,18 @@ $vm = array_map('file_view_model', $files);
         </div>
       </template>
     </div>
+  </div>
+
+  <!-- Toasts -->
+  <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center gap-2 pointer-events-none">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="bento shadow-pop px-4 py-2.5 text-sm font-medium flex items-center gap-2"
+           :class="t.isError ? 'text-red-600 dark:text-red-400' : 'text-cv-text'">
+        <span x-show="!t.isError" class="text-cv-success">●</span>
+        <span x-show="t.isError" class="text-red-500">●</span>
+        <span x-text="t.msg"></span>
+      </div>
+    </template>
   </div>
 
 </div>

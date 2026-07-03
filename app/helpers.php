@@ -15,6 +15,21 @@ function is_logged_in(): bool
     return !empty($_SESSION['authed']);
 }
 
+// API auth: a configured api_key grants access via Authorization: Bearer.
+// Used as an alternative to session login for script/curl access.
+function is_api_authed(): bool
+{
+    $key = config()['api_key'] ?? '';
+    if ($key === '') return false;
+    $hdr = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+    if ($hdr === '' && function_exists('getallheaders')) {
+        $all = getallheaders();
+        $hdr = $all['Authorization'] ?? $all['authorization'] ?? '';
+    }
+    if (!preg_match('/^Bearer\s+(.+)$/i', $hdr, $m)) return false;
+    return hash_equals($key, trim($m[1]));
+}
+
 function require_login(): void
 {
     if (!is_logged_in()) {
@@ -119,10 +134,34 @@ function verify_token(string $payload, string $token): bool
     return hash_equals(hash_hmac('sha256', $payload . '|' . $exp, $secret), $sig);
 }
 
-// Constant-time password check (config still plaintext — hash for prod).
+// Upload rate limit: max N uploads per window per IP. Returns true if allowed
+// (and records the attempt); false if over limit. Best-effort, SQLite-backed.
+function upload_rate_limited(): bool
+{
+    $cfg = config();
+    $max = 60;      // max uploads
+    $window = 60;   // per 60 seconds
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    $pdo = db($cfg['db_path']);
+    $now = microtime(true);
+    $pdo->prepare('DELETE FROM upload_log WHERE created_at < ?')->execute([$now - $window]);
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM upload_log WHERE ip = ?');
+    $stmt->execute([$ip]);
+    if ((int)$stmt->fetchColumn() >= $max) {
+        return true; // limited
+    }
+    $pdo->prepare('INSERT INTO upload_log (ip, created_at) VALUES (?, ?)')->execute([$ip, $now]);
+    return false;
+}
+
+// Password check: supports both plaintext (constant-time) and password_hash
+// strings ($2y$ / $argon2id$). Hashing the config value is recommended.
 function check_password(string $input): bool
 {
     $expected = config()['password'];
+    if (preg_match('/^\$(2y|2a|2b|argon2i|argon2id)\$/', $expected)) {
+        return password_verify($input, $expected);
+    }
     return hash_equals($expected, $input);
 }
 

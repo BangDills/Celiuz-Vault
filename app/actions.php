@@ -191,6 +191,16 @@ function api(string $path): void
 {
     $method = $_SERVER['REQUEST_METHOD'];
     try {
+        // Versioning routes (regex-matched) handled before the static match.
+        if (preg_match('#^/api/file/(\d+)/versions$#', $path, $m)) {
+            $GLOBALS['__vfile'] = (int)$m[1];
+            if ($method === 'GET') { api_list_versions(); return; }
+            if ($method === 'POST') { api_restore_version(); return; }
+        }
+        if (preg_match('#^/api/version/(\d+)$#', $path, $m)) {
+            $GLOBALS['__vver'] = (int)$m[1];
+            if ($method === 'DELETE') { api_delete_version(); return; }
+        }
         match (true) {
             $path === '/api/upload' && $method === 'POST' => api_upload(),
             $path === '/api/folder' && $method === 'POST' => api_folder(),
@@ -210,6 +220,10 @@ function api(string $path): void
 
 function api_upload(): void
 {
+    if (upload_rate_limited()) {
+        json_out(['error' => 'Terlalu banyak upload, coba lagi nanti'], 429);
+        return;
+    }
     $folderId = isset($_GET['folder']) && $_GET['folder'] !== '' ? (int)$_GET['folder'] : null;
     if (empty($_FILES['file'])) {
         throw new RuntimeException('No file');
@@ -329,6 +343,43 @@ function api_note_delete(): void
     json_out(['ok' => true]);
 }
 
+// --- File versioning --------------------------------------------------
+
+function api_list_versions(): void
+{
+    $fileId = $GLOBALS['__vfile'] ?? 0;
+    $versions = list_versions($fileId);
+    json_out([
+        'current' => file_view_model(get_file($fileId) ?? ['id' => $fileId, 'name' => '', 'mime' => '', 'size' => 0, 'storage_id' => '', 'created_at' => '', 'thumb' => null]),
+        'versions' => array_map(function ($v) {
+            return [
+                'id'      => (int)$v['id'],
+                'size'    => (int)$v['size'],
+                'size_h'  => human_size((int)$v['size']),
+                'mime'    => $v['mime'],
+                'created' => $v['created_at'],
+            ];
+        }, $versions),
+    ]);
+}
+
+function api_restore_version(): void
+{
+    $fileId = $GLOBALS['__vfile'] ?? 0;
+    $body = json_in();
+    $versionId = (int)($body['version_id'] ?? 0);
+    $file = restore_version($fileId, $versionId);
+    if (!$file) { json_out(['error' => 'Not found'], 404); return; }
+    json_out(file_view_model($file));
+}
+
+function api_delete_version(): void
+{
+    $versionId = $GLOBALS['__vver'] ?? 0;
+    delete_version($versionId);
+    json_out(['ok' => true]);
+}
+
 function note_view_model(array $note): array
 {
     $title = trim($note['title']);
@@ -361,6 +412,7 @@ function file_view_model(array $file): array
         'preview'   => url('/raw/' . $file['id']),
         'thumb'     => $file['thumb'] !== null ? url('/thumb/' . $file['id']) : null,
         'icon'      => icon_for($kind),
+        'versions'  => version_count((int)$file['id']),
     ];
 }
 
