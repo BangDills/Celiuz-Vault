@@ -208,10 +208,10 @@ $vm = array_map('file_view_model', $files);
   <!-- Note editor modal -->
   <div x-show="noteModal" x-cloak @keydown.escape.window="noteModal=false" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" @click.self="closeNote()">
     <div class="bento p-6 w-full max-w-lg flex flex-col max-h-[90vh] shadow-pop">
-      <input x-model="noteForm.title" type="text" placeholder="Judul catatan..."
+      <input x-model="noteForm.title" type="text" placeholder="Judul catatan"
              class="cv-focus w-full h-11 px-3.5 rounded-xl bg-cv-bg border border-cv-border font-semibold mb-3 transition">
-      <textarea x-model="noteForm.body" rows="10" placeholder="Tulis catatan... URL otomatis jadi link."
-                class="cv-focus w-full flex-1 px-3.5 py-2.5 rounded-xl bg-cv-bg border border-cv-border text-sm resize-none font-mono leading-relaxed transition"></textarea>
+      <textarea x-model="noteForm.body" rows="10" placeholder="Tulis catatan . . ."
+                class="cv-focus w-full flex-1 px-3.5 py-2.5 rounded-xl bg-cv-bg border border-cv-border text-sm resize-none font-product leading-relaxed transition"></textarea>
       <div class="flex justify-between items-center mt-4 gap-2">
         <button x-show="noteForm.id" @click="deleteNote({id: noteForm.id})" class="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm text-red-600 dark:text-red-400 hover:bg-red-500/10 transition">
           <?= lucide('trash','w-4 h-4') ?> Hapus

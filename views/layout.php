@@ -31,12 +31,12 @@
               float:  '0 4px 16px -4px rgba(16,24,40,.10), 0 2px 6px -2px rgba(16,24,40,.06)',
               pop:    '0 12px 40px -12px rgba(16,24,40,.22)',
             },
-            fontFamily: { sans: ['Inter', 'Geist', 'Manrope', 'system-ui', 'sans-serif'] },
+            fontFamily: { sans: ['Inter', 'Geist', 'Manrope', 'system-ui', 'sans-serif'], product: ['Figtree', 'Inter', 'system-ui', 'sans-serif'] },
           },
         },
       };
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= e(url('/assets/app.css')) ?>">
     <!-- app.js before Alpine so vault()/humanSize() exist when x-data initializes. -->
     <script defer src="<?= e(url('/assets/app.js')) ?>"></script>
