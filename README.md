@@ -10,10 +10,12 @@ Self-hosted personal file hosting — single PHP app, zero build step, made for 
 - **Trash Bin (Soft-Delete)**: Safe deletion mechanism (soft-delete), allowing file restoration, individual permanent deletion, or bulk empty
 - **Favorites (Star)**: Mark important files as favorites for quick access under the Favorites view
 - **Password Changer**: Change and hash your vault login password directly from the Settings page
+- **Bulk Actions**: Select multiple files to star/unstar, move to folders, send to Trash, restore, or delete permanently
+- **Quick Type Filters**: Instantly filter files by category (Images, Videos, PDFs, Documents, Audio, Archives) with horizontal scroll support
 - **Drag & drop / multi-file / paste (Ctrl+V) upload** with live progress
 - **Built-in preview**: image, video, audio, PDF, text/code
 - **Video thumbnails** — auto-generated via ffmpeg (graceful fallback to icon if ffmpeg is absent, common on shared hosting)
-- **Share links**: custom token, optional password, optional expiry, hit counter
+- **Share links**: unified share modal combining direct copy link with password-protected and expiring links
 - **QR codes** for share links — generated locally on your server (no third-party API), scan with a phone to open/download
 - **Notes** — text notes with titles; URLs auto-link on display, stored alongside files
 - **File versioning** — uploading a file with the same name supersedes the old revision; restore or delete past versions
@@ -24,7 +26,6 @@ Self-hosted personal file hosting — single PHP app, zero build step, made for 
 - **API key access** — optional bearer token for script/curl access without browser login
 - **Folders** with breadcrumbs (nested, drag-ready structure)
 - **Signed download URLs** — files live outside the web root, served only via short-lived HMAC tokens
-- **Dark / light theme** toggle, persisted
 - **Single-user auth** — one password, constant-time check, brute-force throttle
 - **Responsive** + keyboard-friendly
 - **Zero-config DB** — SQLite (file-based), WAL mode
@@ -146,6 +147,8 @@ The SQLite DB (`data.sqlite`) and upload folder are created automatically on fir
 | `DELETE` | `/api/trash/<id>` | Permanently delete file from storage |
 | `DELETE` | `/api/trash` | Permanently delete all files in Trash |
 | `POST` | `/api/password` | Change vault login password — `{current_password, new_password}` |
+| `POST` | `/api/bulk` | Bulk actions — `{action: 'trash'|'restore'|'delete'|'favorite'|'unfavorite'|'move', ids: [...], folder?: int}` |
+| `GET` | `/api/folders` | List all folders in the vault |
 
 ## License
 
