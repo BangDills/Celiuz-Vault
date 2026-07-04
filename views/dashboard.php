@@ -65,6 +65,31 @@ $v = $view ?? 'dashboard';
 
     <div class="cv-content">
 
+      <!-- Quick Type Filters -->
+      <div x-show="['dashboard', 'files', 'recent', 'favorites'].includes(currentView)" class="flex items-center gap-2 mb-6 overflow-x-auto pb-1 scrollbar-none" x-cloak>
+        <button @click="activeTypeFilter = ''" class="cv-filter-chip" :class="activeTypeFilter === '' && 'is-active'">
+          Semua
+        </button>
+        <button @click="activeTypeFilter = 'image'" class="cv-filter-chip" :class="activeTypeFilter === 'image' && 'is-active'">
+          <?= lucide('image', 'w-3.5 h-3.5') ?> Gambar
+        </button>
+        <button @click="activeTypeFilter = 'video'" class="cv-filter-chip" :class="activeTypeFilter === 'video' && 'is-active'">
+          <?= lucide('video', 'w-3.5 h-3.5') ?> Video
+        </button>
+        <button @click="activeTypeFilter = 'pdf'" class="cv-filter-chip" :class="activeTypeFilter === 'pdf' && 'is-active'">
+          <?= lucide('file-text', 'w-3.5 h-3.5') ?> PDF
+        </button>
+        <button @click="activeTypeFilter = 'text'" class="cv-filter-chip" :class="activeTypeFilter === 'text' && 'is-active'">
+          <?= lucide('file', 'w-3.5 h-3.5') ?> Dokumen/Teks
+        </button>
+        <button @click="activeTypeFilter = 'audio'" class="cv-filter-chip" :class="activeTypeFilter === 'audio' && 'is-active'">
+          <?= lucide('music', 'w-3.5 h-3.5') ?> Audio
+        </button>
+        <button @click="activeTypeFilter = 'archive'" class="cv-filter-chip" :class="activeTypeFilter === 'archive' && 'is-active'">
+          <?= lucide('archive', 'w-3.5 h-3.5') ?> Arsip
+        </button>
+      </div>
+
 <?php if ($v === 'dashboard'): ?>
 <!-- ══ DASHBOARD ══ -->
 <nav x-show="chain.length" class="cv-breadcrumb" x-cloak>

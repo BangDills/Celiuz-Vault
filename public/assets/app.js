@@ -47,6 +47,7 @@ function vault(initial) {
     bulkMoveModal: false,
     bulkMoveFolderId: '',
     allFolders: [],
+    activeTypeFilter: '',
     copied: false,
     notes: initial.notes || [],
     noteModal: false,
@@ -85,7 +86,13 @@ function vault(initial) {
     // --- Search + sort (client-side, design/UX only; no backend change) ---
     get filteredFiles() {
       const q = this.search.trim().toLowerCase();
-      let list = this.files.filter(f => !q || f.name.toLowerCase().includes(q));
+      let list = this.files;
+      if (q) {
+        list = list.filter(f => f.name.toLowerCase().includes(q));
+      }
+      if (this.activeTypeFilter) {
+        list = list.filter(f => f.kind === this.activeTypeFilter);
+      }
       const by = this.sortKey;
       return list.slice().sort((a, b) => {
         if (by === 'name') return a.name.localeCompare(b.name);
@@ -94,6 +101,9 @@ function vault(initial) {
       });
     },
     get filteredNotes() {
+      if (this.activeTypeFilter && this.activeTypeFilter !== 'text') {
+        return [];
+      }
       const q = this.search.trim().toLowerCase();
       return this.notes.filter(n => !q || n.title.toLowerCase().includes(q) || (n.body || '').toLowerCase().includes(q));
     },

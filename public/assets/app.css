@@ -688,3 +688,52 @@ select.cv-input { cursor: pointer; }
 .animate-slide-up {
   animation: cvSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* --- Quick Type Filters Styling --- */
+.cv-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.cv-filter-chip:hover {
+  background: #e2e8f0;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+.cv-filter-chip.is-active {
+  background: #4f7cff;
+  border-color: #4f7cff;
+  color: #fff;
+}
+.dark .cv-filter-chip {
+  background: #1e2025;
+  border-color: #26272b;
+  color: #9ca3af;
+}
+.dark .cv-filter-chip:hover {
+  background: #26272b;
+  color: #e7e7ea;
+}
+.dark .cv-filter-chip.is-active {
+  background: #4f7cff;
+  border-color: #4f7cff;
+  color: #fff;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
