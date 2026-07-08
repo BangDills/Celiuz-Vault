@@ -10,6 +10,7 @@
     </div>
 
     <form method="post" action="<?= e(url('/login')) ?>" class="bento p-6">
+      <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
       <label class="block text-sm font-medium mb-2">Password</label>
       <input type="password" name="password" autofocus required
              class="cv-focus w-full px-4 h-11 rounded-xl bg-cv-bg border border-cv-border text-[15px] transition">

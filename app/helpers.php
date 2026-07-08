@@ -15,6 +15,29 @@ function is_logged_in(): bool
     return !empty($_SESSION['authed']);
 }
 
+// CSRF: per-session random token. Verified on every state-changing request.
+// API key auth (Bearer) bypasses CSRF — it carries its own credential.
+function csrf_token(): string
+{
+    if (empty($_SESSION['csrf'])) {
+        $_SESSION['csrf'] = bin2hex(random_bytes(16));
+    }
+    return $_SESSION['csrf'];
+}
+
+function csrf_verify(): bool
+{
+    $tok = $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '';
+    if ($tok === '' && function_exists('getallheaders')) {
+        $all = getallheaders();
+        $tok = $all['X-CSRF-Token'] ?? $all['X-Csrf-Token'] ?? '';
+    }
+    if ($tok === '' && is_array($_POST) && isset($_POST['csrf'])) {
+        $tok = (string)$_POST['csrf'];
+    }
+    return $tok !== '' && hash_equals($_SESSION['csrf'] ?? '', $tok);
+}
+
 // API auth: a configured api_key grants access via Authorization: Bearer.
 // Used as an alternative to session login for script/curl access.
 function is_api_authed(): bool
@@ -82,29 +105,74 @@ function file_kind(string $mime, string $name): string
     return 'file';
 }
 
+// MIME types safe to render inline in a browser. Anything else (HTML, SVG,
+// XML, JS, etc.) is forced to download so it can't run a stored-XSS payload
+// from /raw — same-origin, with the user's session.
+function mime_inline_safe(string $mime, string $name): bool
+{
+    static $safe = [
+        'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/bmp', 'image/avif',
+        'video/mp4', 'video/webm', 'video/ogg',
+        'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm', 'audio/aac', 'audio/flac',
+        'application/pdf', 'application/octet-stream',
+        'text/plain',
+    ];
+    if (in_array(strtolower($mime), $safe, true)) return true;
+    // octet-stream already covered; deny anything else by default.
+    return false;
+}
+
+// RFC 5987 filename* for non-ASCII names, plus ASCII fallback.
+function content_disposition_filename(string $name): string
+{
+    $ascii = preg_replace('/[^\x20-\x7E]/', '_', $name);
+    $ascii = str_replace('"', '', $ascii);
+    if ($ascii === $name) {
+        return 'filename="' . addslashes($name) . '"';
+    }
+    return 'filename="' . addslashes($ascii) . '"; filename*=UTF-8\'\'' . rawurlencode($name);
+}
+
 // Stream a file from protected storage with range support. Never expose path.
-function stream_file(string $path, string $name, string $mime, int $size): void
+function stream_file(string $path, string $name, string $mime, int $size, bool $inline = true): void
 {
     if (!is_readable($path)) {
         http_response_code(404);
         echo 'Not found';
         return;
     }
+    // Force download for anything that isn't on the inline-safe list, even when
+    // the caller asked for inline preview — blocks stored XSS via /raw.
+    if ($inline && !mime_inline_safe($mime, $name)) {
+        $inline = false;
+    }
     $start = 0;
-    $end = $size - 1;
+    $end = max(0, $size - 1);
     if (isset($_SERVER['HTTP_RANGE'])) {
         if (preg_match('/bytes=(\d+)-(\d*)/', $_SERVER['HTTP_RANGE'], $m)) {
             $start = (int)$m[1];
             if ($m[2] !== '') $end = (int)$m[2];
-            http_response_code(206);
-            header("Content-Range: bytes $start-$end/$size");
         }
+    }
+    // Clamp the end to EOF (a client may ask for bytes past the end).
+    $end = min($end, max(0, $size - 1));
+    // Range sanity: reject requests starting past EOF with 416. An empty
+    // file (size 0) is served as a 200 with no body — not a 416.
+    if ($size > 0 && ($start >= $size || $end < $start)) {
+        http_response_code(416);
+        header('Content-Range: bytes */' . $size);
+        return;
+    }
+    if ($size > 0 && ($start !== 0 || $end !== $size - 1)) {
+        http_response_code(206);
+        header("Content-Range: bytes $start-$end/$size");
     }
     header('Content-Type: ' . $mime);
     header('Content-Length: ' . ($end - $start + 1));
-    header('Content-Disposition: inline; filename="' . addslashes($name) . '"');
+    header('Content-Disposition: ' . ($inline ? 'inline' : 'attachment') . '; ' . content_disposition_filename($name));
     header('Accept-Ranges: bytes');
     header('Cache-Control: private, max-age=0');
+    header('X-Content-Type-Options: nosniff');
     $f = fopen($path, 'rb');
     fseek($f, $start);
     $remaining = $end - $start + 1;
@@ -144,14 +212,37 @@ function upload_rate_limited(): bool
     $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
     $pdo = db($cfg['db_path']);
     $now = microtime(true);
+    $pdo->exec('BEGIN IMMEDIATE');
     $pdo->prepare('DELETE FROM upload_log WHERE created_at < ?')->execute([$now - $window]);
     $stmt = $pdo->prepare('SELECT COUNT(*) FROM upload_log WHERE ip = ?');
     $stmt->execute([$ip]);
-    if ((int)$stmt->fetchColumn() >= $max) {
-        return true; // limited
+    $over = (int)$stmt->fetchColumn() >= $max;
+    if (!$over) {
+        $pdo->prepare('INSERT INTO upload_log (ip, created_at) VALUES (?, ?)')->execute([$ip, $now]);
     }
-    $pdo->prepare('INSERT INTO upload_log (ip, created_at) VALUES (?, ?)')->execute([$ip, $now]);
-    return false;
+    $pdo->exec('COMMIT');
+    return $over;
+}
+
+// Auth rate limit: caps failed password attempts per IP (login, share unlock,
+// password change). Returns true if the caller should reject the attempt now.
+function auth_rate_limited(string $bucket): bool
+{
+    $max = 10;      // attempts
+    $window = 600;  // per 10 minutes
+    $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+    $pdo = db(config()['db_path']);
+    $now = microtime(true);
+    $pdo->exec('BEGIN IMMEDIATE');
+    $pdo->prepare('DELETE FROM auth_log WHERE created_at < ?')->execute([$now - $window]);
+    $stmt = $pdo->prepare('SELECT COUNT(*) FROM auth_log WHERE ip = ? AND bucket = ?');
+    $stmt->execute([$ip, $bucket]);
+    $over = (int)$stmt->fetchColumn() >= $max;
+    if (!$over) {
+        $pdo->prepare('INSERT INTO auth_log (ip, bucket, created_at) VALUES (?, ?, ?)')->execute([$ip, $bucket, $now]);
+    }
+    $pdo->exec('COMMIT');
+    return $over;
 }
 
 // Password check: supports both plaintext (constant-time) and password_hash

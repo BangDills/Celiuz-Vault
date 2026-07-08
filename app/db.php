@@ -85,6 +85,17 @@ function db_init(string $dbPath): void
         )
     ");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_upload_ip ON upload_log(ip)");
+
+    // Failed-attempt throttle for login / share unlock / password change.
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS auth_log (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip          TEXT    NOT NULL,
+            bucket      TEXT    NOT NULL,
+            created_at  REAL    NOT NULL
+        )
+    ");
+    $pdo->exec("CREATE INDEX IF NOT EXISTS idx_auth_ip_bucket ON auth_log(ip, bucket)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_files_folder ON files(folder_id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_folders_parent ON folders(parent_id)");
     $pdo->exec("CREATE INDEX IF NOT EXISTS idx_notes_folder ON notes(folder_id)");

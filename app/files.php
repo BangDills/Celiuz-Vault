@@ -49,18 +49,34 @@ function save_upload(array $file, ?int $folderId): array
 
     // Versioning: if a file with the same name exists in this folder,
     // archive the old revision and replace the current row in place.
+    // Wrapped in a transaction (BEGIN IMMEDIATE) so two simultaneous uploads
+    // of the same name serialize — without it, both could find the same
+    // existing row and clobber each other's storage_id, orphaning a blob.
     $existing = find_file_in_folder($name, $folderId);
     if ($existing !== null) {
-        archive_version($existing['id'], $existing['storage_id'], $existing['name'], $existing['mime'], (int)$existing['size']);
-        // Remove old thumbnail; the new upload gets a fresh one.
-        if ($existing['thumb'] !== null) {
-            @unlink(storage_dir() . '/' . $existing['thumb']);
+        $pdo->exec('BEGIN IMMEDIATE');
+        try {
+            // Re-read under the lock: another upload may have just replaced it.
+            $existing = find_file_in_folder($name, $folderId);
+            if ($existing === null) {
+                $pdo->exec('ROLLBACK');
+                // Lost the race → treat as a fresh insert below.
+            } else {
+                archive_version($existing['id'], $existing['storage_id'], $existing['name'], $existing['mime'], (int)$existing['size']);
+                if ($existing['thumb'] !== null) {
+                    @unlink(storage_dir() . '/' . $existing['thumb']);
+                }
+                $stmt = $pdo->prepare(
+                    'UPDATE files SET storage_id = ?, mime = ?, size = ?, thumb = ? WHERE id = ?'
+                );
+                $stmt->execute([$sid, $mime, $file['size'], $thumb, $existing['id']]);
+                $pdo->exec('COMMIT');
+                return get_file((int)$existing['id']) ?? throw new RuntimeException('Update failed');
+            }
+        } catch (Throwable $e) {
+            $pdo->exec('ROLLBACK');
+            throw $e;
         }
-        $stmt = $pdo->prepare(
-            'UPDATE files SET storage_id = ?, mime = ?, size = ?, thumb = ? WHERE id = ?'
-        );
-        $stmt->execute([$sid, $mime, $file['size'], $thumb, $existing['id']]);
-        return get_file((int)$existing['id']) ?? throw new RuntimeException('Update failed');
     }
 
     $stmt = $pdo->prepare(
@@ -160,12 +176,16 @@ function generate_thumb(string $filePath, string $mime): ?string
         return null;
     }
     $base = basename($filePath);
-    $out = substr($base, 0, (int)strrpos($base, '.')) . '.thumb.jpg';
+    $dot = strrpos($base, '.');
+    // Fallback to the full name when there's no extension, so a video named
+    // "clip" doesn't produce a shared ".thumb.jpg" in the storage root.
+    $stem = $dot === false ? $base : substr($base, 0, (int)$dot);
+    $out = ($stem === '' ? 'thumb' : $stem) . '.thumb.jpg';
     $outPath = dirname($filePath) . '/' . $out;
 
-    // Grab frame at ~1s, scale to 480px wide, overwrite. Errors suppressed.
+    // Grab the first frame (some clips are <1s; -ss 0 avoids a blank thumb).
     $cmd = sprintf(
-        '%s -y -ss 1 -i %s -vframes 1 -vf "scale=480:-1" %s 2>&1',
+        '%s -y -ss 0 -i %s -vframes 1 -vf "scale=480:-1" %s 2>&1',
         escapeshellarg($ffmpeg),
         escapeshellarg($filePath),
         escapeshellarg($outPath)
@@ -269,10 +289,15 @@ function restore_file(int $id): void
 }
 
 // Permanent delete: removes file blob, versions, and DB row.
+// Guard: only files already soft-deleted (in trash) may be purged, so a stray
+// DELETE /api/trash/{id} for a live file can't bypass the trash step.
 function permanent_delete_file(int $id): void
 {
     $file = get_file($id);
     if (!$file) return;
+    if ($file['deleted_at'] === null) {
+        throw new RuntimeException('File masih aktif, pindahkan ke trash dulu');
+    }
     $path = file_path($file);
     if (is_file($path)) @unlink($path);
     if ($file['thumb'] !== null) {

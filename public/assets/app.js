@@ -61,8 +61,23 @@ function vault(initial) {
     sidebarOpen: false,
     currentView: initial.view || 'dashboard',
     shares: initial.shares || [],
+    csrfToken: initial.csrfToken || '',
     humanSize,
     fileIconSvg,
+
+    // Wrapper around fetch that injects the CSRF token header for state-changing
+    // requests. GET must stay header-free (no CORS preflight, no token needed).
+    apiFetch(url, opts = {}) {
+      const method = (opts.method || 'GET').toUpperCase();
+      if (method !== 'GET') {
+        const headers = { ...(opts.headers || {}) };
+        if (!headers['X-CSRF-Token'] && this.csrfToken) {
+          headers['X-CSRF-Token'] = this.csrfToken;
+        }
+        opts.headers = headers;
+      }
+      return fetch(url, opts);
+    },
 
     init() {
       document.documentElement.classList.toggle('dark', this.theme === 'dark');
@@ -142,6 +157,7 @@ function vault(initial) {
 
         const url = window.VAULT_BASE + '/api/upload' + (this.folder != null ? '?folder=' + this.folder : '');
         xhr.open('POST', url);
+        if (this.csrfToken) xhr.setRequestHeader('X-CSRF-Token', this.csrfToken);
         xhr.upload.onprogress = ev => {
           if (ev.lengthComputable) entry.pct = Math.round((ev.loaded / ev.total) * 90);
         };
@@ -152,8 +168,10 @@ function vault(initial) {
             entry.status = 'selesai';
             const nf = res.files[0];
             if (nf) this.files.unshift(nf);
-            this.stats.count++;
-            this.stats.size += file.size;
+            // Prefer server-reported totals so a versioned (replace) upload
+            // doesn't inflate count/size client-side.
+            if (res.stats) this.stats.count = res.stats.count, this.stats.size = res.stats.size;
+            else { this.stats.count++; this.stats.size += file.size; }
             this.toast(nf.versions > 0 ? 'Versi baru disimpan' : 'Upload selesai');
             setTimeout(() => {
               this.uploads = this.uploads.filter(u => u.id !== id);
@@ -181,7 +199,7 @@ function vault(initial) {
 
     createFolder() {
       if (!this.newFolder.trim()) return;
-      fetch(window.VAULT_BASE + '/api/folder', {
+      this.apiFetch(window.VAULT_BASE + '/api/folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: this.newFolder, parent: this.folder }),
@@ -195,7 +213,7 @@ function vault(initial) {
 
     deleteFile(f) {
       if (!confirm(`Hapus "${f.name}"?`)) return;
-      fetch(window.VAULT_BASE + '/api/file/' + f.id, { method: 'DELETE' })
+      this.apiFetch(window.VAULT_BASE + '/api/file/' + f.id, { method: 'DELETE' })
         .then(() => {
           this.files = this.files.filter(x => x.id !== f.id);
           this.stats.count--;
@@ -216,16 +234,8 @@ function vault(initial) {
       this.shareModal = true;
     },
 
-    shareFirstFile() {
-      if (this.files.length) {
-        this.shareFile(this.files[0]);
-      } else {
-        this.toast('Belum ada file untuk di-share', true);
-      }
-    },
-
     createShare() {
-      fetch(window.VAULT_BASE + '/api/share', {
+      this.apiFetch(window.VAULT_BASE + '/api/share', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -253,7 +263,7 @@ function vault(initial) {
 
     restoreVersion(vid) {
       if (!this.versionFile) return;
-      fetch(window.VAULT_BASE + '/api/file/' + this.versionFile.id + '/versions', {
+      this.apiFetch(window.VAULT_BASE + '/api/file/' + this.versionFile.id + '/versions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ version_id: vid }),
@@ -269,7 +279,7 @@ function vault(initial) {
 
     deleteVersion(vid) {
       if (!confirm('Hapus versi lama ini?')) return;
-      fetch(window.VAULT_BASE + '/api/version/' + vid, { method: 'DELETE' })
+      this.apiFetch(window.VAULT_BASE + '/api/version/' + vid, { method: 'DELETE' })
         .then(() => { this.versionList = this.versionList.filter(v => v.id !== vid); });
     },
 
@@ -283,7 +293,7 @@ function vault(initial) {
       e.preventDefault();
       const id = parseInt(e.dataTransfer.getData('text/plain'), 10);
       if (!id) return;
-      fetch(window.VAULT_BASE + '/api/file/' + id, {
+      this.apiFetch(window.VAULT_BASE + '/api/file/' + id, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder: folder ? folder.id : null }),
@@ -311,7 +321,7 @@ function vault(initial) {
       const base = window.VAULT_BASE + '/api/note' + (this.folder != null ? '?folder=' + this.folder : '');
       const method = this.noteForm.id ? 'PUT' : 'POST';
       const url = this.noteForm.id ? window.VAULT_BASE + '/api/note/' + this.noteForm.id : base;
-      fetch(url, {
+      this.apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: this.noteForm.title, body: this.noteForm.body, folder: this.folder }),
@@ -327,7 +337,7 @@ function vault(initial) {
     deleteNote(n) {
       if (!n || !n.id) { this.closeNote(); return; }
       if (!confirm('Hapus catatan ini?')) return;
-      fetch(window.VAULT_BASE + '/api/note/' + n.id, { method: 'DELETE' })
+      this.apiFetch(window.VAULT_BASE + '/api/note/' + n.id, { method: 'DELETE' })
         .then(() => {
           this.notes = this.notes.filter(x => x.id !== n.id);
           if (this.noteForm.id === n.id) this.closeNote();
@@ -353,7 +363,7 @@ function vault(initial) {
 
     // --- Favorites ---
     toggleFavorite(f) {
-      fetch(window.VAULT_BASE + '/api/favorite/' + f.id, { method: 'POST' })
+      this.apiFetch(window.VAULT_BASE + '/api/favorite/' + f.id, { method: 'POST' })
         .then(r => r.json())
         .then(res => {
           f.favorited = res.favorited;
@@ -363,7 +373,7 @@ function vault(initial) {
 
     // --- Trash ---
     restoreFromTrash(f) {
-      fetch(window.VAULT_BASE + '/api/trash/' + f.id + '/restore', { method: 'POST' })
+      this.apiFetch(window.VAULT_BASE + '/api/trash/' + f.id + '/restore', { method: 'POST' })
         .then(r => r.json())
         .then(() => {
           this.files = this.files.filter(x => x.id !== f.id);
@@ -374,7 +384,7 @@ function vault(initial) {
 
     permanentDelete(f) {
       if (!confirm(`Permanently delete "${f.name}"? This cannot be undone.`)) return;
-      fetch(window.VAULT_BASE + '/api/trash/' + f.id, { method: 'DELETE' })
+      this.apiFetch(window.VAULT_BASE + '/api/trash/' + f.id, { method: 'DELETE' })
         .then(() => {
           this.files = this.files.filter(x => x.id !== f.id);
           this.stats.trash--;
@@ -384,7 +394,7 @@ function vault(initial) {
 
     emptyTrash() {
       if (!confirm('Permanently delete all files in trash?')) return;
-      fetch(window.VAULT_BASE + '/api/trash', { method: 'DELETE' })
+      this.apiFetch(window.VAULT_BASE + '/api/trash', { method: 'DELETE' })
         .then(() => {
           this.files = [];
           this.stats.trash = 0;
@@ -395,7 +405,7 @@ function vault(initial) {
     // --- Shared links ---
     deleteShareById(id) {
       if (!confirm('Delete this share link?')) return;
-      fetch(window.VAULT_BASE + '/api/share/' + id, { method: 'DELETE' })
+      this.apiFetch(window.VAULT_BASE + '/api/share/' + id, { method: 'DELETE' })
         .then(() => {
           this.shares = this.shares.filter(s => s.id !== id);
           this.toast('Share link deleted');
@@ -407,7 +417,7 @@ function vault(initial) {
         this.toast('Password baru dan konfirmasi tidak cocok', true);
         return;
       }
-      fetch(window.VAULT_BASE + '/api/password', {
+      this.apiFetch(window.VAULT_BASE + '/api/password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -463,7 +473,7 @@ function vault(initial) {
     },
     bulkAction(action, extra = {}) {
       if (!this.selectedFiles.length) return;
-      fetch(window.VAULT_BASE + '/api/bulk', {
+      this.apiFetch(window.VAULT_BASE + '/api/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ids: this.selectedFiles, ...extra }),
@@ -495,6 +505,10 @@ function vault(initial) {
           this.files.forEach(f => {
             if (this.selectedFiles.includes(f.id)) f.favorited = false;
           });
+          // In the Favorites view, unfavorited items no longer belong here.
+          if (this.currentView === 'favorites') {
+            this.files = this.files.filter(f => !this.selectedFiles.includes(f.id));
+          }
           this.toast(this.selectedFiles.length + ' file dihapus dari favorit');
         } else if (action === 'move') {
           const folderName = extra.folder ? (this.allFolders.find(f => f.id === parseInt(extra.folder))?.name || 'Folder') : 'Root';

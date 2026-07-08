@@ -22,7 +22,7 @@ if (!empty($shares)) {
 $v = $view ?? 'dashboard';
 ?>
 <script>window.VAULT_BASE = <?= json_encode(url('')) ?>;</script>
-<div x-data="vault(<?= e(json_encode(['files' => $vm, 'folders' => $folders, 'notes' => $notes, 'chain' => $chain, 'folder' => $folderId, 'stats' => $stats, 'view' => $v, 'shares' => $shareVm], JSON_UNESCAPED_UNICODE)) ?>)"
+<div x-data="vault(<?= e(json_encode(['files' => $vm, 'folders' => $folders, 'notes' => $notes, 'chain' => $chain, 'folder' => $folderId, 'stats' => $stats, 'view' => $v, 'shares' => $shareVm, 'csrfToken' => csrf_token()], JSON_UNESCAPED_UNICODE)) ?>)"
      @drop.prevent="onDrop" @dragover.prevent @paste.window="onPaste"
      class="cv-app-shell">
 
@@ -165,7 +165,7 @@ $v = $view ?? 'dashboard';
   <template x-for="s in shares" :key="s.id">
     <div class="cv-file-row">
       <div class="cv-file-icon cv-ficon-file"><?= lucide('link', 'w-5 h-5') ?></div>
-      <div class="cv-file-info"><span class="cv-file-name" x-text="s.file_name"></span><span class="cv-file-cat"><span x-text="s.hits"></span> hits<template x-if="s.has_password"> · 🔒</template><template x-if="s.expires_at"> · exp <span x-text="s.expires_at?.slice(0,16)"></span></template></span></div>
+      <div class="cv-file-info"><span class="cv-file-name" x-text="s.file_name"></span><span class="cv-file-cat"><span x-text="s.hits"></span> hits<template x-if="s.has_password"> · 🔒</template><template x-if="s.expires_at"> · exp <span x-text="s.expires_at?.slice(0,16)"></span> (UTC)</template></span></div>
       <span class="cv-file-date" x-text="s.created ? s.created.slice(0,16).replace('T',' ') : ''"></span>
       <div class="cv-file-actions flex gap-1" @click.stop>
         <button @click="copy(location.origin + s.url)" class="cv-dot-btn" title="Copy link"><?= lucide('link', 'w-4 h-4') ?></button>

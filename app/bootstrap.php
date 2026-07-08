@@ -6,6 +6,15 @@ declare(strict_types=1);
 const APP_ROOT = __DIR__ . '/..';
 $config = require APP_ROOT . '/config.php';
 
+// Refuse to boot with the default HMAC secret — a known secret lets anyone
+// forge signed download tokens for shared files. Force the operator to set one.
+if (($config['secret'] ?? '') === 'change-this-to-a-long-random-string' || ($config['secret'] ?? '') === '') {
+    http_response_code(500);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo "Config error: set a random 'secret' in config.php (run: php -r \"echo bin2hex(random_bytes(32));\").\n";
+    exit;
+}
+
 date_default_timezone_set('UTC');
 error_reporting(E_ALL);
 ini_set('display_errors', $config['password'] === 'change-me-please' ? '1' : '0');
@@ -13,7 +22,8 @@ ini_set('display_errors', $config['password'] === 'change-me-please' ? '1' : '0'
 session_set_cookie_params([
     'httponly' => true,
     'samesite' => 'Lax',
-    'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
+    'secure'   => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+                  || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'),
 ]);
 if (session_status() === PHP_SESSION_NONE) {
     session_start();

@@ -4,6 +4,8 @@
 return [
     'password'        => 'change-me-please',
     'api_key'         => '',
+    // REQUIRED: the app refuses to boot with this default value. Generate one:
+    //   php -r "echo bin2hex(random_bytes(32));"
     'secret'          => 'change-this-to-a-long-random-string',
     'storage_path'    => dirname(__DIR__) . '/storage/uploads',
     'db_path'         => __DIR__ . '/data.sqlite',

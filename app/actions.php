@@ -22,6 +22,18 @@ function json_in(): array
     return is_array($d) ? $d : [];
 }
 
+// Pull an integer id from PATH_INFO after a prefix like '/api/file/'.
+// Rejects anything that isn't a pure integer (e.g. '/api/file/5/versions')
+// by returning 0 — callers treat 0 as "not found". Guards the str_starts_with
+// route matchers from mis-parsing sub-paths into wrong handlers.
+function parse_int_path(string $prefix): int
+{
+    $rest = substr($_SERVER['PATH_INFO'] ?? '', strlen($prefix));
+    $rest = ltrim($rest, '/');
+    if ($rest === '' || !ctype_digit($rest)) return 0;
+    return (int)$rest;
+}
+
 // --- Auth -------------------------------------------------------------
 
 function login_view(): void
@@ -31,6 +43,16 @@ function login_view(): void
 
 function login_post(): void
 {
+    if (!csrf_verify()) {
+        http_response_code(403);
+        view('login', ['error' => 'Sesi kedaluwarsa, coba lagi']);
+        return;
+    }
+    if (auth_rate_limited('login')) {
+        sleep(1);
+        view('login', ['error' => 'Terlalu banyak percobaan, coba lagi nanti']);
+        return;
+    }
     $input = (string)($_POST['password'] ?? '');
     if (check_password($input)) {
         session_regenerate_id(true);
@@ -172,8 +194,7 @@ function file_download_signed(int $id, string $token): void
         echo 'Link expired';
         return;
     }
-    header('Content-Disposition: attachment; filename="' . addslashes($file['name']) . '"');
-    stream_file(file_path($file), $file['name'], $file['mime'], (int)$file['size']);
+    stream_file(file_path($file), $file['name'], $file['mime'], (int)$file['size'], false);
 }
 
 // --- Share page (public) ---------------------------------------------
@@ -203,12 +224,17 @@ function share_view(string $token): void
     $unlocked = !share_needs_password($share);
 
     if (share_needs_password($share) && $_SERVER['REQUEST_METHOD'] === 'POST') {
-        $pw = (string)($_POST['password'] ?? '');
-        if (share_check_password($share, $pw)) {
-            $unlocked = true;
-        } else {
-            $error = 'Password salah';
+        if (auth_rate_limited('share:' . $share['token'])) {
+            $error = 'Terlalu banyak percobaan, coba lagi nanti';
             sleep(1);
+        } else {
+            $pw = (string)($_POST['password'] ?? '');
+            if (share_check_password($share, $pw)) {
+                $unlocked = true;
+            } else {
+                $error = 'Password salah';
+                sleep(1);
+            }
         }
     }
 
@@ -233,6 +259,13 @@ function share_view(string $token): void
 function api(string $path): void
 {
     $method = $_SERVER['REQUEST_METHOD'];
+    // CSRF: every state-changing API request needs a valid token, UNLESS the
+    // caller authenticated via the API key (Bearer) — that's a credential, not
+    // a browser session, so CSRF doesn't apply.
+    if ($method !== 'GET' && !is_api_authed() && !csrf_verify()) {
+        json_out(['error' => 'CSRF token invalid'], 403);
+        return;
+    }
     try {
         // Versioning routes (regex-matched) handled before the static match.
         if (preg_match('#^/api/file/(\d+)/versions$#', $path, $m)) {
@@ -272,7 +305,10 @@ function api(string $path): void
             default => json_out(['error' => 'Not found'], 404),
         };
     } catch (Throwable $e) {
-        json_out(['error' => $e->getMessage()], 400);
+        // Hide DB/driver internals from the client; surface only our own
+        // RuntimeException messages (which we control) and a generic fallback.
+        $msg = $e instanceof RuntimeException ? $e->getMessage() : 'Permintaan tidak dapat diproses';
+        json_out(['error' => $msg], 400);
     }
 }
 
@@ -293,7 +329,7 @@ function api_upload(): void
         $row = save_upload($entry, $folderId);
         $out[] = file_view_model($row);
     }
-    json_out(['files' => $out]);
+    json_out(['files' => $out, 'stats' => ['count' => file_count(), 'size' => total_size()]]);
 }
 
 // Turn PHP's nested $_FILES structure into a flat list of per-file arrays.
@@ -346,14 +382,14 @@ function api_share(): void
 
 function api_delete_file(): void
 {
-    $id = (int)substr($_SERVER['PATH_INFO'] ?? '', strlen('/api/file/'));
+    $id = parse_int_path('/api/file/');
     delete_file($id);
     json_out(['ok' => true]);
 }
 
 function api_move_file(): void
 {
-    $id = (int)substr($_SERVER['PATH_INFO'] ?? '', strlen('/api/file/'));
+    $id = parse_int_path('/api/file/');
     $body = json_in();
     $folderId = isset($body['folder']) && $body['folder'] !== '' ? (int)$body['folder'] : null;
     move_file($id, $folderId);
@@ -362,7 +398,7 @@ function api_move_file(): void
 
 function api_delete_share(): void
 {
-    $id = (int)substr($_SERVER['PATH_INFO'] ?? '', strlen('/api/share/'));
+    $id = parse_int_path('/api/share/');
     delete_share($id);
     json_out(['ok' => true]);
 }
@@ -381,7 +417,7 @@ function api_note_create(): void
 
 function api_note_update(): void
 {
-    $id = (int)substr($_SERVER['PATH_INFO'] ?? '', strlen('/api/note/'));
+    $id = parse_int_path('/api/note/');
     $body = json_in();
     $title = (string)($body['title'] ?? '');
     $text = (string)($body['body'] ?? '');
@@ -396,7 +432,7 @@ function api_note_update(): void
 
 function api_note_delete(): void
 {
-    $id = (int)substr($_SERVER['PATH_INFO'] ?? '', strlen('/api/note/'));
+    $id = parse_int_path('/api/note/');
     delete_note($id);
     json_out(['ok' => true]);
 }
@@ -406,9 +442,14 @@ function api_note_delete(): void
 function api_list_versions(): void
 {
     $fileId = $GLOBALS['__vfile'] ?? 0;
+    $file = get_file($fileId);
+    if (!$file) {
+        json_out(['error' => 'Not found'], 404);
+        return;
+    }
     $versions = list_versions($fileId);
     json_out([
-        'current' => file_view_model(get_file($fileId) ?? ['id' => $fileId, 'name' => '', 'mime' => '', 'size' => 0, 'storage_id' => '', 'created_at' => '', 'thumb' => null]),
+        'current' => file_view_model($file),
         'versions' => array_map(function ($v) {
             return [
                 'id'      => (int)$v['id'],
@@ -494,6 +535,10 @@ function api_change_password(): void
     }
 
     if (!check_password($current)) {
+        if (auth_rate_limited('changepw')) {
+            json_out(['error' => 'Terlalu banyak percobaan, coba lagi nanti'], 429);
+            return;
+        }
         json_out(['error' => 'Password saat ini salah'], 400);
         return;
     }

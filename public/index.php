@@ -10,7 +10,9 @@ declare(strict_types=1);
 // skips real files via RewriteCond %{REQUEST_FILENAME} -f.
 $uri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 $realPath = __DIR__ . $uri;
-if ($uri !== '/' && is_file($realPath)) {
+// Never serve the SQLite DB (or backups) over the web — even via the built-in
+// server, which otherwise hands real files straight to the client.
+if ($uri !== '/' && is_file($realPath) && !preg_match('#\.(sqlite3?|db)$#i', $uri)) {
     return false; // let the built-in server output the static file
 }
 

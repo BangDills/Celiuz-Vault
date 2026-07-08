@@ -17,6 +17,11 @@
     Require all denied
 </FilesMatch>
 
+# Never serve the SQLite DB or other sensitive data files over the web.
+<FilesMatch "\.(sqlite|sqlite3|db)$">
+    Require all denied
+</FilesMatch>
+
 # PHP upload limits (cPanel may override; also set in cPanel MultiPHP INI).
 <IfModule mod_php.c>
     php_value upload_max_filesize 512M
