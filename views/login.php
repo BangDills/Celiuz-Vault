@@ -9,15 +9,15 @@
       <p class="text-sm text-cv-muted mt-1">File hosting pribadi</p>
     </div>
 
-    <form method="post" action="<?= e(url('/login')) ?>" class="bento p-6">
+    <form method="post" action="<?= e(url('/login')) ?>" class="cv-card p-6">
       <input type="hidden" name="csrf" value="<?= e(csrf_token()) ?>">
       <label class="block text-sm font-medium mb-2">Password</label>
       <input type="password" name="password" autofocus required
-             class="cv-focus w-full px-4 h-11 rounded-xl bg-cv-bg border border-cv-border text-[15px] transition">
+             class="cv-input w-full">
       <?php if ($error): ?>
-        <p class="text-sm text-red-600 dark:text-red-400 mt-3"><?= e($error) ?></p>
+        <p class="text-sm text-[#ff3b30] dark:text-[#ff453a] mt-3"><?= e($error) ?></p>
       <?php endif; ?>
-      <button type="submit" class="w-full mt-4 h-11 rounded-xl bg-cv-accent hover:bg-cv-accenthover text-cv-accentfg font-medium transition shadow-soft">
+      <button type="submit" class="cv-btn-primary w-full mt-4" style="height:44px">
         Masuk
       </button>
     </form>

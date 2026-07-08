@@ -4,7 +4,7 @@
           <h2 class="cv-section-title"><?= e($fileListTitle ?? 'Recent Files') ?></h2>
         </div>
         <div class="cv-card" x-show="filteredFiles.length || search">
-          <div x-show="filteredFiles.length > 0" class="flex items-center gap-3 px-4 py-2.5 border-b border-cv-border bg-slate-50/50 dark:bg-zinc-900/10">
+          <div x-show="filteredFiles.length > 0" class="flex items-center gap-3 px-4 py-2.5 border-b border-cv-border bg-cv-bg">
             <input type="checkbox" :checked="isAllSelected()" @click="toggleSelectAll()" class="cv-checkbox">
             <span class="text-xs font-semibold text-cv-muted" x-text="isAllSelected() ? 'Batal Pilih Semua' : 'Pilih Semua'"></span>
           </div>

@@ -10,7 +10,7 @@
               </div>
               <p class="text-xs text-cv-muted line-clamp-4 whitespace-pre-wrap break-words [&_a]:text-cv-accent [&_a]:underline" x-html="n.html"></p>
               <div class="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition">
-                <button @click.stop="deleteNote(n)" class="p-1.5 rounded-lg text-cv-muted hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition" title="Hapus">
+                <button @click.stop="deleteNote(n)" class="p-1.5 rounded-lg text-cv-muted hover:bg-[#ff3b30]/10 hover:text-[#ff3b30] transition" title="Hapus">
                   <?= lucide('trash', 'w-4 h-4') ?>
                 </button>
               </div>

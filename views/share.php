@@ -8,7 +8,7 @@ $kind = file_kind($file['mime'], $file['name']);
 $iconName = icon_for($kind);
 ?>
 <div class="min-h-screen flex items-center justify-center p-4">
-  <div class="bento w-full max-w-lg overflow-hidden shadow-float">
+  <div class="cv-card w-full max-w-lg overflow-hidden shadow-float">
 
     <?php if (!$unlocked): ?>
       <!-- Password gate -->
@@ -19,10 +19,9 @@ $iconName = icon_for($kind);
           <p class="text-sm text-cv-muted mt-1">Masukkan password untuk melihat file</p>
         </div>
         <form method="post" class="space-y-3">
-          <input type="password" name="password" autofocus required
-                 class="cv-focus w-full h-11 px-4 rounded-xl bg-cv-bg border border-cv-border transition">
-          <?php if ($error): ?><p class="text-sm text-red-600 dark:text-red-400"><?= e($error) ?></p><?php endif; ?>
-          <button class="w-full h-11 rounded-xl bg-cv-accent hover:bg-cv-accenthover text-cv-accentfg font-medium transition shadow-soft">Buka</button>
+          <input type="password" name="password" autofocus required class="cv-input w-full">
+          <?php if ($error): ?><p class="text-sm text-[#ff3b30] dark:text-[#ff453a]"><?= e($error) ?></p><?php endif; ?>
+          <button class="cv-btn-primary w-full" style="height:44px">Buka</button>
         </form>
       </div>
     <?php else: ?>
@@ -49,8 +48,7 @@ $iconName = icon_for($kind);
             <p class="font-semibold truncate"><?= e($file['name']) ?></p>
             <p class="text-sm text-cv-muted"><?= e(human_size((int)$file['size'])) ?></p>
           </div>
-          <a href="<?= e($dlUrl) ?>" download
-             class="shrink-0 inline-flex items-center gap-2 px-4 h-10 rounded-xl bg-cv-accent hover:bg-cv-accenthover text-cv-accentfg font-medium transition shadow-soft">
+          <a href="<?= e($dlUrl) ?>" download class="cv-btn-primary shrink-0 inline-flex items-center gap-2">
             <?= lucide('download','w-[18px] h-[18px]') ?> Download
           </a>
         </div>

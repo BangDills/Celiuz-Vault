@@ -15,37 +15,37 @@
           extend: {
             colors: {
               cv: {
-                bg:      '#f8f9fb',
+                // Apple/Mac palette: light gray canvas, near-black ink, blue accent.
+                bg:      '#f5f5f7',
                 surface: '#ffffff',
-                border:  '#e8eaef',
-                text:    '#1a1d26',
-                muted:   '#6b7280',
-                faint:   '#9ca3af',
-                accent:  '#4f7cff', accenthover: '#3b63e0', accentfg: '#ffffff',
-                success: '#16a34a',
-                sidebar: '#fafbfd',
-                sbhover: '#eef1f8',
-                sbactive: '#edf2ff',
+                border:  '#d2d2d7',
+                text:    '#1d1d1f',
+                muted:   '#86868b',
+                faint:   '#aeaeb2',
+                accent:  '#0071e3', accenthover: '#0077ed', accentfg: '#ffffff',
+                success: '#34c759',
+                sidebar: 'rgba(245,245,247,0.8)',
+                sbhover: '#e8e8ed',
+                sbactive: '#e8f0fe',
               },
             },
             borderRadius: { bento: '16px' },
             boxShadow: {
-              soft:   '0 1px 2px 0 rgba(16,24,40,.04), 0 1px 3px 0 rgba(16,24,40,.04)',
-              float:  '0 4px 16px -4px rgba(16,24,40,.10), 0 2px 6px -2px rgba(16,24,40,.06)',
-              pop:    '0 12px 40px -12px rgba(16,24,40,.22)',
+              soft:   '0 1px 2px 0 rgba(0,0,0,.04), 0 1px 3px 0 rgba(0,0,0,.04)',
+              float:  '0 4px 16px -4px rgba(0,0,0,.10), 0 2px 6px -2px rgba(0,0,0,.06)',
+              pop:    '0 12px 40px -12px rgba(0,0,0,.22)',
             },
-            fontFamily: { sans: ['Inter', 'Geist', 'Manrope', 'system-ui', 'sans-serif'], product: ['Figtree', 'Inter', 'system-ui', 'sans-serif'] },
+            fontFamily: { sans: ['-apple-system','BlinkMacSystemFont','SF Pro Display','SF Pro Text','Helvetica Neue','Inter','system-ui','sans-serif'], product: ['SF Pro Display','-apple-system','BlinkMacSystemFont','Inter','system-ui','sans-serif'] },
           },
         },
       };
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="<?= e(url('/assets/app.css')) ?>">
     <!-- app.js before Alpine so vault()/humanSize() exist when x-data initializes. -->
     <script defer src="<?= e(url('/assets/app.js')) ?>"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body class="min-h-screen bg-cv-bg text-cv-text font-sans antialiased selection:bg-blue-100 dark:bg-[#0f1011] dark:text-[#e7e7ea] dark:selection:bg-blue-500/30">
+<body class="min-h-screen bg-cv-bg text-cv-text font-product antialiased selection:bg-[#0071e3]/20 dark:bg-black dark:text-[#f5f5f7] dark:selection:bg-[#0a84ff]/30">
 <?= $content ?? '' ?>
 </body>
 </html>

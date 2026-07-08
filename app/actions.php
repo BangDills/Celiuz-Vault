@@ -119,6 +119,12 @@ function dashboard(string $path): void
             $data['notes']   = [];
             $data['chain']   = [];
             break;
+        case 'notes':
+            $data['files']   = [];
+            $data['folders'] = [];
+            $data['notes']   = array_map('note_view_model', list_all_notes());
+            $data['chain']   = [];
+            break;
         default: // 'dashboard'
             $data['files']   = list_files($folderId);
             $data['folders'] = list_folders($folderId);

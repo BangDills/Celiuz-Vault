@@ -36,6 +36,19 @@ function list_notes(?int $folderId): array
     return $stmt->fetchAll();
 }
 
+// All notes across every folder — for the standalone Notes view.
+function list_all_notes(): array
+{
+    return db(config()['db_path'])
+        ->query('SELECT * FROM notes ORDER BY updated_at DESC')
+        ->fetchAll();
+}
+
+function note_count(): int
+{
+    return (int)db(config()['db_path'])->query('SELECT COUNT(*) FROM notes')->fetchColumn();
+}
+
 function update_note(int $id, string $title, string $body, ?int $folderId): ?array
 {
     $pdo = db(config()['db_path']);

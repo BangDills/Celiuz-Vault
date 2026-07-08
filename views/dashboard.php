@@ -39,6 +39,7 @@ $v = $view ?? 'dashboard';
         <a href="<?= e(url('/?view=recent')) ?>" class="cv-nav-item <?= $v === 'recent' ? 'is-active' : '' ?>"><?= lucide('clock', 'w-[18px] h-[18px]') ?><span>Recent</span></a>
         <a href="<?= e(url('/?view=shared')) ?>" class="cv-nav-item <?= $v === 'shared' ? 'is-active' : '' ?>"><?= lucide('users', 'w-[18px] h-[18px]') ?><span>Shared</span></a>
         <a href="<?= e(url('/?view=favorites')) ?>" class="cv-nav-item <?= $v === 'favorites' ? 'is-active' : '' ?>"><?= lucide('star', 'w-[18px] h-[18px]') ?><span>Favorites</span></a>
+        <a href="<?= e(url('/?view=notes')) ?>" class="cv-nav-item <?= $v === 'notes' ? 'is-active' : '' ?>"><?= lucide('note', 'w-[18px] h-[18px]') ?><span>Notes</span></a>
         <a href="<?= e(url('/?view=trash')) ?>" class="cv-nav-item <?= $v === 'trash' ? 'is-active' : '' ?>"><?= lucide('trash', 'w-[18px] h-[18px]') ?><span>Trash</span><?php if (($stats['trash'] ?? 0) > 0): ?><span class="cv-nav-badge"><?= $stats['trash'] ?></span><?php endif; ?></a>
       </nav>
       <div class="cv-nav-bottom">
@@ -112,8 +113,8 @@ $v = $view ?? 'dashboard';
     <?php include __DIR__ . '/_file_list.php'; ?>
     <?php include __DIR__ . '/_notes_section.php'; ?>
     <section class="cv-section"><h2 class="cv-section-title">Activity Feed</h2><div class="cv-card">
-      <div class="cv-activity-item"><div class="cv-activity-icon bg-blue-50 text-blue-500 dark:bg-blue-500/10"><?= lucide('upload', 'w-4 h-4') ?></div><div class="cv-activity-text"><p><span x-text="stats.count"></span> files stored</p><span>Total <span x-text="humanSize(stats.size)"></span></span></div><span class="cv-activity-time">Now</span></div>
-      <div class="cv-activity-item"><div class="cv-activity-icon bg-green-50 text-green-500 dark:bg-green-500/10"><?= lucide('folder', 'w-4 h-4') ?></div><div class="cv-activity-text"><p><span x-text="folders.length"></span> folders</p><span>Current directory</span></div><span class="cv-activity-time">Current</span></div>
+      <div class="cv-activity-item"><div class="cv-activity-icon bg-cv-sbg text-cv-accent" style="background:#e8f0fe"><?= lucide('upload', 'w-4 h-4') ?></div><div class="cv-activity-text"><p><span x-text="stats.count"></span> files stored</p><span>Total <span x-text="humanSize(stats.size)"></span></span></div><span class="cv-activity-time">Now</span></div>
+      <div class="cv-activity-item"><div class="cv-activity-icon" style="background:#e8f8ee;color:#34c759"><?= lucide('folder', 'w-4 h-4') ?></div><div class="cv-activity-text"><p><span x-text="folders.length"></span> folders</p><span>Current directory</span></div><span class="cv-activity-time">Current</span></div>
     </div></section>
   </div>
   <div class="cv-col-right">
@@ -180,13 +181,38 @@ $v = $view ?? 'dashboard';
 <!-- ══ FAVORITES ══ -->
 <?php $fileListTitle = 'Favorites'; include __DIR__ . '/_file_list.php'; ?>
 
+<?php elseif ($v === 'notes'): ?>
+<!-- ══ NOTES ══ -->
+<div class="cv-section-header mb-4"><h2 class="cv-section-title" style="margin-bottom:0">Notes</h2>
+  <button @click="openNote(null)" class="cv-btn-primary"><?= lucide('plus', 'w-4 h-4') ?> New Note</button>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" x-show="filteredNotes.length">
+  <template x-for="n in filteredNotes" :key="'n'+n.id">
+    <div class="cv-card card-hover group relative p-4 cursor-pointer" @click="openNote(n)">
+      <div class="flex items-start gap-2.5 mb-2">
+        <span class="text-cv-accent mt-0.5 shrink-0"><?= lucide('note', 'w-[18px] h-[18px]') ?></span>
+        <p class="text-sm font-semibold truncate flex-1" x-text="n.title"></p>
+      </div>
+      <p class="text-xs text-cv-muted line-clamp-4 whitespace-pre-wrap break-words [&_a]:text-cv-accent [&_a]:underline" x-html="n.html"></p>
+      <div class="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 transition">
+        <button @click.stop="deleteNote(n)" class="p-1.5 rounded-lg text-cv-muted hover:bg-[#ff3b30]/10 hover:text-[#ff3b30] transition" title="Hapus">
+          <?= lucide('trash', 'w-4 h-4') ?>
+        </button>
+      </div>
+    </div>
+  </template>
+</div>
+<div x-show="!filteredNotes.length" class="cv-card px-4 py-10 text-center text-cv-muted text-sm">
+  Belum ada catatan. Buat pertamamu!
+</div>
+
 <?php elseif ($v === 'trash'): ?>
 <!-- ══ TRASH ══ -->
 <div class="cv-section-header mb-4"><h2 class="cv-section-title" style="margin-bottom:0">Trash</h2>
-  <button x-show="filteredFiles.length" @click="emptyTrash()" class="cv-btn-secondary text-red-500" style="border-color:#fca5a5"><?= lucide('trash', 'w-4 h-4') ?> Empty Trash</button>
+  <button x-show="filteredFiles.length" @click="emptyTrash()" class="cv-btn-secondary text-[#ff3b30]" style="border-color:#ffd5d2"><?= lucide('trash', 'w-4 h-4') ?> Empty Trash</button>
 </div>
 <div class="cv-card" x-show="filteredFiles.length">
-  <div class="flex items-center gap-3 px-4 py-2.5 border-b border-cv-border bg-slate-50/50 dark:bg-zinc-900/10">
+  <div class="flex items-center gap-3 px-4 py-2.5 border-b border-cv-border bg-cv-bg">
     <input type="checkbox" :checked="isAllSelected()" @click="toggleSelectAll()" class="cv-checkbox">
     <span class="text-xs font-semibold text-cv-muted" x-text="isAllSelected() ? 'Batal Pilih Semua' : 'Pilih Semua'"></span>
   </div>
@@ -198,7 +224,7 @@ $v = $view ?? 'dashboard';
       <span class="cv-file-size" x-text="f.size_h"></span>
       <div class="cv-file-actions flex gap-1" @click.stop>
         <button @click="restoreFromTrash(f)" class="cv-btn-primary text-xs h-7 px-2.5">Restore</button>
-        <button @click="permanentDelete(f)" class="cv-dot-btn text-red-500"><?= lucide('trash', 'w-4 h-4') ?></button>
+        <button @click="permanentDelete(f)" class="cv-dot-btn text-[#ff3b30]"><?= lucide('trash', 'w-4 h-4') ?></button>
       </div>
     </div>
   </template>
@@ -246,7 +272,7 @@ $v = $view ?? 'dashboard';
 
   <div x-show="modal" x-cloak @keydown.escape.window="modal=false" class="cv-modal-overlay" @click.self="modal=false"><div class="relative max-w-5xl max-h-[90vh] w-full"><template x-if="modalFile?.kind==='image'"><img :src="modalFile.preview" class="max-h-[90vh] mx-auto rounded-bento shadow-pop"></template><template x-if="modalFile?.kind==='video'"><video :src="modalFile.preview" controls autoplay class="max-h-[90vh] mx-auto rounded-bento shadow-pop"></video></template><template x-if="modalFile?.kind==='audio'"><div class="cv-card p-8 text-center"><div class="inline-flex w-12 h-12 rounded-xl bg-cv-accent/10 text-cv-accent items-center justify-center mb-3"><?= lucide('music','w-6 h-6') ?></div><p class="font-medium mb-4" x-text="modalFile.name"></p><audio :src="modalFile.preview" controls autoplay class="mx-auto"></audio></div></template><template x-if="modalFile?.kind==='pdf'"><iframe :src="modalFile.preview" class="w-full h-[85vh] rounded-bento bg-white"></iframe></template><template x-if="modalFile?.kind==='text'"><iframe :src="modalFile.preview" class="w-full h-[85vh] rounded-bento bg-white"></iframe></template><template x-if="modalFile && !['image','video','audio','pdf','text'].includes(modalFile.kind)"><div class="cv-card p-10 text-center"><div class="inline-flex w-14 h-14 rounded-xl bg-cv-bg border border-cv-border text-cv-faint items-center justify-center mb-4" x-html="fileIconSvg(modalFile.icon)"></div><p class="font-medium mb-4" x-text="modalFile.name"></p><a :href="modalFile.preview" download class="cv-btn-primary inline-flex items-center gap-2"><?= lucide('download','w-4 h-4') ?> Download</a></div></template></div></div>
 
-  <div x-show="noteModal" x-cloak @keydown.escape.window="noteModal=false" class="cv-modal-overlay" @click.self="closeNote()"><div class="cv-modal cv-modal-md flex flex-col max-h-[90vh]"><input x-model="noteForm.title" type="text" placeholder="Judul catatan" class="cv-input w-full font-semibold mb-3"><textarea x-model="noteForm.body" rows="10" placeholder="Tulis catatan . . ." class="cv-input w-full flex-1 resize-none text-sm leading-relaxed"></textarea><div class="flex justify-between items-center mt-4 gap-2"><button x-show="noteForm.id" @click="deleteNote({id: noteForm.id})" class="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm text-red-600 dark:text-red-400 hover:bg-red-500/10 transition"><?= lucide('trash','w-4 h-4') ?> Hapus</button><div class="flex gap-2 ml-auto"><button @click="closeNote()" class="cv-btn-secondary">Batal</button><button @click="saveNote()" class="cv-btn-primary">Simpan</button></div></div></div></div>
+  <div x-show="noteModal" x-cloak @keydown.escape.window="noteModal=false" class="cv-modal-overlay" @click.self="closeNote()"><div class="cv-modal cv-modal-md flex flex-col max-h-[90vh]"><input x-model="noteForm.title" type="text" placeholder="Judul catatan" class="cv-input w-full font-semibold mb-3"><textarea x-model="noteForm.body" rows="10" placeholder="Tulis catatan . . ." class="cv-input w-full flex-1 resize-none text-sm leading-relaxed"></textarea><div class="flex justify-between items-center mt-4 gap-2"><button x-show="noteForm.id" @click="deleteNote({id: noteForm.id})" class="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg text-sm text-[#ff3b30] dark:text-[#ff453a] hover:bg-[#ff3b30]/10 transition"><?= lucide('trash','w-4 h-4') ?> Hapus</button><div class="flex gap-2 ml-auto"><button @click="closeNote()" class="cv-btn-secondary">Batal</button><button @click="saveNote()" class="cv-btn-primary">Simpan</button></div></div></div></div>
 
   <div x-show="shareModal" x-cloak class="cv-modal-overlay" @click.self="shareModal=false">
     <div class="cv-modal cv-modal-sm">
@@ -257,7 +283,7 @@ $v = $view ?? 'dashboard';
           <div>
             <label class="text-xs font-semibold text-cv-muted block mb-1.5 uppercase tracking-wider">1. Link Langsung (Tanpa Pengaman)</label>
             <div class="flex gap-2">
-              <input :value="activeShareFile ? activeShareFile.preview : ''" readonly class="cv-input flex-1 font-mono text-xs bg-slate-50 dark:bg-zinc-900/50">
+              <input :value="activeShareFile ? activeShareFile.preview : ''" readonly class="cv-input flex-1 font-mono text-xs">
               <button @click="copy(activeShareFile.preview)" class="cv-btn-primary px-3" title="Salin Link Langsung">
                 <?= lucide('copy', 'w-4 h-4') ?>
               </button>
@@ -265,7 +291,7 @@ $v = $view ?? 'dashboard';
             <p class="text-[11px] text-cv-muted mt-1">Gunakan link langsung untuk akses cepat tanpa password.</p>
           </div>
           
-          <div class="h-[1px] bg-slate-100 dark:bg-zinc-800 my-2"></div>
+          <div class="h-[1px] bg-cv-border my-2"></div>
           
           <!-- Opsi 2 & 3: Link Aman (Password & Kadaluwarsa) -->
           <form @submit.prevent="createShare()" class="space-y-3">
@@ -312,7 +338,7 @@ $v = $view ?? 'dashboard';
   </div>
 
   <!-- Floating Bulk Actions Bar -->
-  <div x-show="selectedFiles.length > 0" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-white dark:bg-zinc-900 border border-cv-border px-5 py-3 rounded-2xl shadow-pop flex items-center gap-4 animate-slide-up" x-cloak>
+  <div x-show="selectedFiles.length > 0" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-cv-surface border border-cv-border px-5 py-3 rounded-2xl shadow-pop flex items-center gap-4 animate-slide-up" x-cloak>
     <span class="text-xs font-semibold text-cv-muted"><span x-text="selectedFiles.length"></span> file terpilih</span>
     <div class="h-4 w-[1px] bg-cv-border"></div>
     <div class="flex gap-2">
@@ -320,13 +346,13 @@ $v = $view ?? 'dashboard';
         <div class="flex gap-2">
           <button @click="bulkToggleFavorite()" class="cv-btn-secondary h-9 px-3 text-xs gap-1.5"><?= lucide('star', 'w-3.5 h-3.5') ?> Star/Unstar</button>
           <button @click="openBulkMoveModal()" class="cv-btn-secondary h-9 px-3 text-xs gap-1.5"><?= lucide('folder', 'w-3.5 h-3.5') ?> Pindahkan</button>
-          <button @click="bulkAction('trash')" class="cv-btn-primary bg-red-600 hover:bg-red-700 border-none h-9 px-3 text-xs gap-1.5"><?= lucide('trash', 'w-3.5 h-3.5') ?> Hapus</button>
+          <button @click="bulkAction('trash')" class="cv-btn-primary bg-[#ff3b30] hover:bg-[#ff453a] border-none h-9 px-3 text-xs gap-1.5"><?= lucide('trash', 'w-3.5 h-3.5') ?> Hapus</button>
         </div>
       </template>
       <template x-if="currentView === 'trash'">
         <div class="flex gap-2">
           <button @click="bulkAction('restore')" class="cv-btn-primary h-9 px-3 text-xs gap-1.5"><?= lucide('refresh-cw', 'w-3.5 h-3.5') ?> Restore</button>
-          <button @click="bulkAction('delete')" class="cv-btn-primary bg-red-600 hover:bg-red-700 border-none h-9 px-3 text-xs gap-1.5"><?= lucide('trash', 'w-3.5 h-3.5') ?> Hapus Permanen</button>
+          <button @click="bulkAction('delete')" class="cv-btn-primary bg-[#ff3b30] hover:bg-[#ff453a] border-none h-9 px-3 text-xs gap-1.5"><?= lucide('trash', 'w-3.5 h-3.5') ?> Hapus Permanen</button>
         </div>
       </template>
     </div>
@@ -356,7 +382,7 @@ $v = $view ?? 'dashboard';
     </div>
   </div>
 
-  <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center gap-2 pointer-events-none"><template x-for="t in toasts" :key="t.id"><div class="cv-card shadow-pop px-4 py-2.5 text-sm font-medium flex items-center gap-2" :class="t.isError ? 'text-red-600 dark:text-red-400' : 'text-cv-text'"><span x-show="!t.isError" class="text-cv-success">●</span><span x-show="t.isError" class="text-red-500">●</span><span x-text="t.msg"></span></div></template></div>
+  <div class="fixed bottom-4 left-1/2 -translate-x-1/2 z-[60] flex flex-col items-center gap-2 pointer-events-none"><template x-for="t in toasts" :key="t.id"><div class="cv-card shadow-pop px-4 py-2.5 text-sm font-medium flex items-center gap-2" :class="t.isError ? 'text-[#ff3b30] dark:text-[#ff453a]' : 'text-cv-text'"><span x-show="!t.isError" class="text-cv-success">●</span><span x-show="t.isError" class="text-[#ff3b30]">●</span><span x-text="t.msg"></span></div></template></div>
 
 </div>
 <?php $content = ob_get_clean(); include __DIR__ . '/layout.php';
